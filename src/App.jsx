@@ -825,27 +825,28 @@ const deletarProduto = async (id) => {
                 </div>
             )}
 
-{/* SEÇÃO DE ADICIONAIS NO MODAL */}
 {itemEmPersonalizacao.permiteAcrescimo && dados.adicionais?.length > 0 && (
   <div className="border-t pt-6 mb-8">
     <p className="text-[10px] font-black text-orange-500 uppercase mb-4 italic tracking-widest text-center">Turbinar seu pedido?</p>
     <div className="space-y-3">
       {dados.adicionais.map(adc => {
-        // MÁGICA AQUI: Verificamos se ESTE ID específico está na lista de escolhidos
-        const estaSelecionado = itemEmPersonalizacao.adicionaisEscolhidos?.some(item => item.id === adc.id);
+        // CORREÇÃO AQUI: Usamos adc._id pois é o padrão que vem do seu banco
+        const idAdicional = adc._id || adc.id;
+        const estaSelecionado = itemEmPersonalizacao.adicionaisEscolhidos?.some(item => (item._id || item.id) === idAdicional);
 
         return (
           <button 
-            key={adc.id} 
+            key={idAdicional} 
+            type="button" // Garante que não submeta formulários
             onClick={() => {
               const listaAtual = itemEmPersonalizacao.adicionaisEscolhidos || [];
               let novaLista;
 
               if (estaSelecionado) {
-                // Se já estava lá, removemos apenas esse ID
-                novaLista = listaAtual.filter(item => item.id !== adc.id);
+                // Se já estava lá, removemos comparando o _id
+                novaLista = listaAtual.filter(item => (item._id || item.id) !== idAdicional);
               } else {
-                // Se não estava, adicionamos esse objeto à lista
+                // Se não estava, adicionamos
                 novaLista = [...listaAtual, adc];
               }
 
