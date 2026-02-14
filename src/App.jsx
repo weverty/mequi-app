@@ -419,72 +419,49 @@ const finalizarPedidoTotal = async () => {
     const taxaEntrega = opcaoConsumo === 'entrega' ? 5 : 0;
     const totalComTaxa = total + taxaEntrega;
 
-    // --- LOGICA PARA PAGAMENTO ONLINE (MERCADO PAGO) ---
-    if (metodoPagamento === 'online') {
-      // 1. Salva tudo no localStorage para recuperar quando o cliente voltar do site do banco
-      localStorage.setItem('mequi_total_temp', totalComTaxa.toString());
-      localStorage.setItem('mequi_carrinho_temp', JSON.stringify(carrinho));
-      localStorage.setItem('mequi_dados_cliente', JSON.stringify({
-        ...dadosEntrega,
-        opcaoConsumo: opcaoConsumo
-      }));
+    // Detalhe do pagamento para o Zap
+    const detalhePgto = metodoPagamento === 'online' ? 'CARTÃO/PIX ONLINE' : 
+                        metodoPagamento === 'retirada_local' ? 'PAGAR NA RETIRADA' :
+                        (metodoLocalDetallhe === 'troco' ? `DINHEIRO (Troco p/ R$ ${valorTroco})` : `MÁQUINA NO DELIVERY (${metodoLocalDetallhe})`);
 
-      // 2. Chama a função que faz o redirecionamento
-      await gerarPagamentoMercadoPago();
-      return; // Interrompe aqui, pois o cliente vai sair da página
-    }
-
-    // --- LOGICA PARA PAGAMENTO LOCAL (NA ENTREGA OU NA RETIRADA) ---
-    
-    // Define a descrição do local que aparecerá no Monitor/Cozinha
-    let infoDestino = "";
-    if (opcaoConsumo === 'retirar') {
-      infoDestino = `📍 RETIRADA NO BALCÃO`;
-    } else {
-      infoDestino = `🚀 ENTREGA: ${dadosEntrega.rua}, ${dadosEntrega.numero} (${dadosEntrega.referencia})`;
-    }
-
-    // Define o detalhe do pagamento para o Log
-    const detalhePgto = metodoPagamento === 'retirada_local' 
-      ? "PAGAR NA RETIRADA" 
-      : (metodoLocalDetallhe === 'troco' ? `DINHEIRO (Troco p/ ${valorTroco})` : `CARTÃO/PIX (Levar Maquininha)`);
-
-    const novoPedido = {
+    // Objeto completo com tudo que o Zap precisa
+    const resumoParaSucesso = {
       senha: senha.toString(),
-      itens: carrinho,
+      itens: [...carrinho],
+      total: totalComTaxa,
       tipo: opcaoConsumo,
-      info: `${infoDestino} | CLIENTE: ${dadosEntrega.nome} | TEL: ${dadosEntrega.telefone} | PGTO: ${detalhePgto}`,
-      totalfinal: totalComTaxa,
-      status: 'pendente_local'
+      pagamento: detalhePgto,
+      cliente: { ...dadosEntrega }, // Salva o nome e telefone aqui dentro!
+      data: new Date().toLocaleString()
     };
 
-    // Salva no Supabase
-    const { data, error } = await supabase
-      .from('pedidos')
-      .insert([novoPedido])
-      .select();
-
-    if (error) {
-      console.error("Erro Supabase:", error);
-      alert("Erro ao salvar no banco: " + error.message);
+    if (metodoPagamento === 'online') {
+      localStorage.setItem('mequi_ultimo_pedido', JSON.stringify(resumoParaSucesso));
+      await gerarPagamentoMercadoPago();
       return;
     }
 
-    // Sucesso: Gera a senha na tela e limpa tudo
-    setSenhaGerada(senha);
+    // Salvamento local no Supabase (Removendo a coluna 'data' para evitar o erro anterior)
+    const { error } = await supabase.from('pedidos').insert([{
+      senha: senha.toString(),
+      itens: carrinho,
+      tipo: opcaoConsumo,
+      info: `CLIENTE: ${dadosEntrega.nome} | TEL: ${dadosEntrega.telefone} | PGTO: ${detalhePgto}`,
+      totalfinal: totalComTaxa,
+      status: 'pendente_local'
+    }]);
+
+    if (error) throw error;
+
+    // AQUI ESTÁ O SEGREDO: Passamos o objeto completo para o estado
+    setPedidoFinalizado(resumoParaSucesso);
     
-    // Limpa os estados e o carrinho
     setCarrinho([]);
     setTotal(0);
-    localStorage.removeItem('mequi_carrinho');
     setModalFluxoAberto(false);
 
-    // Remove a senha da tela após 5 segundos
-    setTimeout(() => setSenhaGerada(null), 5000);
-
   } catch (err) {
-    console.error("Erro crítico:", err);
-    alert("Ocorreu um erro interno. Tente novamente.");
+    alert("Erro: " + err.message);
   } finally {
     setProcessandoMP(false);
   }
@@ -493,84 +470,70 @@ const finalizarPedidoTotal = async () => {
 const TelaSucesso = () => {
   if (!pedidoFinalizado) return null;
 
-  // 1. Recupera os dados que salvamos no finalizarPedidoTotal
-  const dadosSalvos = JSON.parse(localStorage.getItem('mequi_dados_cliente') || '{}');
-  
-  // 2. Configura o número da sua loja (Substitua pelo seu real)
-  const CELULAR_LOJA = "5531972129019"; 
+  const CELULAR_LOJA = "5531972129019"; // Número que vi no seu print
 
-  // 3. Monta a lista de itens com os detalhes de adicionais e removidos
   const itensTexto = pedidoFinalizado.itens.map(it => {
-    let linha = `• 1x ${it.nome}`;
-    if (it.adicionaisEscolhidos && it.adicionaisEscolhidos.length > 0) {
-      const adcs = it.adicionaisEscolhidos.map(a => a.nome).join(', ');
-      linha += `%0A   [+] Adicionais: ${adcs}`;
+    let linha = `• 1x ${it.nome} (R$ ${it.precoFinal.toFixed(2)})`;
+    if (it.adicionaisEscolhidos?.length > 0) {
+      linha += `%0A  + Adicionais: ${it.adicionaisEscolhidos.map(a => a.nome).join(', ')}`;
     }
-    if (it.removidos && it.removidos.length > 0) {
-      linha += `%0A   [-] Sem: ${it.removidos.join(', ')}`;
+    if (it.removidos?.length > 0) {
+      linha += `%0A  - Sem: ${it.removidos.join(', ')}`;
     }
     return linha;
   }).join('%0A%0A');
 
-  // 4. Monta o corpo da mensagem com todos os detalhes
-  const mensagemZap = 
-    `*🍔 NOVO PEDIDO - SENHA #${pedidoFinalizado.senha}*%0A` +
+  const msg = 
+    `*🍔 NOVO PEDIDO - #${pedidoFinalizado.senha}*%0A` +
     `------------------------------------------%0A` +
-    `*👤 CLIENTE:* ${dadosSalvos.nome || 'Não informado'}%0A` +
-    `*📞 CONTATO:* ${dadosSalvos.telefone || 'Não informado'}%0A` +
-    `*📍 TIPO:* ${pedidoFinalizado.tipo === 'entrega' ? 'DELIVERY' : 'RETIRADA NO BALCÃO'}%0A` +
+    `*👤 CLIENTE:* ${pedidoFinalizado.cliente?.nome || 'Não informado'}%0A` +
+    `*📞 CONTATO:* ${pedidoFinalizado.cliente?.telefone || 'Não informado'}%0A` +
+    `*📍 TIPO:* ${pedidoFinalizado.tipo === 'entrega' ? '🚀 DELIVERY' : '🛍️ RETIRADA'}%0A` +
     
     (pedidoFinalizado.tipo === 'entrega' ? 
-    `*🏠 ENDEREÇO:* ${dadosSalvos.rua}, ${dadosSalvos.numero}%0A` +
-    `*📌 REF:* ${dadosSalvos.referencia || 'N/A'}%0A` : '') +
+    `*🏠 ENDEREÇO:* ${pedidoFinalizado.cliente?.rua}, ${pedidoFinalizado.cliente?.numero}%0A` +
+    `*📌 REF:* ${pedidoFinalizado.cliente?.referencia || 'N/A'}%0A` : '') +
     
     `------------------------------------------%0A` +
     `*🛒 ITENS:*%0A${itensTexto}%0A` +
     `------------------------------------------%0A` +
-    `*💰 TOTAL DO PEDIDO: R$ ${pedidoFinalizado.total.toFixed(2)}*%0A` +
-    `*💳 PAGAMENTO:* ${pedidoFinalizado.pagamento || 'A combinar'}%0A` +
+    `*💰 TOTAL: R$ ${pedidoFinalizado.total.toFixed(2)}*%0A` +
+    `*💳 PAGAMENTO:* ${pedidoFinalizado.pagamento}%0A` +
     `------------------------------------------%0A` +
-    `_Pedido enviado via Sistema Mequi_`;
+    `_Pedido gerado pelo Mequi App_`;
 
   return (
-    <div className="fixed inset-0 bg-white z-[5000] flex flex-col items-center p-6 overflow-y-auto animate-fadeIn">
+    <div className="fixed inset-0 bg-white z-[5000] flex flex-col items-center p-6 overflow-y-auto">
       <div className="w-full max-w-md bg-white rounded-[3rem] p-8 border-t-[12px] border-green-500 shadow-2xl mt-10">
-        <div className="flex flex-col items-center mb-8">
-          <div className="bg-green-100 text-green-600 rounded-full p-6 mb-4 animate-bounce">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h2 className="text-4xl font-black uppercase italic text-center tracking-tighter text-gray-800">Sucesso!</h2>
-          <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest mt-2">Clique abaixo para enviar à loja</p>
+        <div className="text-center mb-8">
+          <div className="text-green-500 text-6xl mb-4">✅</div>
+          <h2 className="text-3xl font-black uppercase italic italic text-gray-800">PEDIDO PRONTO!</h2>
+          <p className="text-gray-400 font-bold text-[10px] uppercase">Envie os detalhes abaixo para a nossa cozinha</p>
         </div>
 
-        <div className="bg-gray-50 rounded-[2.5rem] p-8 shadow-inner border-2 border-dashed border-gray-200 mb-8">
-          <div className="text-center">
-            <p className="text-[10px] font-black text-gray-400 uppercase italic">Sua Senha</p>
-            <h1 className="text-7xl font-black italic text-gray-800 tracking-tighter">#{pedidoFinalizado.senha}</h1>
-          </div>
+        <div className="bg-gray-50 rounded-[2.5rem] p-8 border-2 border-dashed border-gray-200 mb-8 text-center">
+           <p className="text-[10px] font-black text-gray-400 uppercase">Sua Senha</p>
+           <h1 className="text-7xl font-black text-gray-800">#{pedidoFinalizado.senha}</h1>
         </div>
 
         <div className="space-y-4">
           <a 
-            href={`https://api.whatsapp.com/send?phone=${CELULAR_LOJA}&text=${mensagemZap}`}
+            href={`https://api.whatsapp.com/send?phone=${CELULAR_LOJA}&text=${msg}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full bg-[#25D366] text-white py-5 rounded-2xl font-black uppercase italic flex justify-center items-center gap-3 shadow-lg active:scale-95 transition-all text-sm"
+            className="w-full bg-[#25D366] text-white py-5 rounded-2xl font-black uppercase italic flex justify-center items-center gap-3 shadow-lg text-sm"
           >
-            <span className="text-2xl">📱</span> Enviar Detalhes para Loja
+            <span className="text-2xl">📱</span> ENVIAR PARA A COZINHA
           </a>
           
           <button 
             onClick={() => {
-              localStorage.removeItem('mequi_ultimo_pedido');
               setPedidoFinalizado(null);
-              window.location.reload(); 
+              localStorage.removeItem('mequi_ultimo_pedido');
             }}
-            className="w-full bg-gray-100 text-gray-400 py-4 rounded-2xl font-black uppercase italic text-xs hover:bg-gray-200"
+            className="w-full bg-gray-100 text-gray-400 py-4 rounded-2xl font-black uppercase italic text-xs"
           >
-            Voltar ao Cardápio
+            NOVO PEDIDO
           </button>
         </div>
       </div>
