@@ -191,31 +191,6 @@ const [historicoVendas, setHistoricoVendas] = useState(() => {
     } catch (error) { alert("Erro ao salvar no Supabase: " + error.message); }
   };
 
-  const deletarProduto = async (id) => {
-    if (window.confirm("Excluir este produto?")) {
-      try {
-        const { error } = await supabase.from('produtos').delete().eq('id', id);
-        if (error) throw error;
-        setAvisoSucesso("Produto removido!");
-        await carregarTudoDoBanco();
-      } catch (error) { alert("Erro ao excluir produto: " + error.message); }
-    }
-  };
-
-  const salvarAdicionalAdmin = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    try {
-      const { error } = await supabase.from('adicionais').insert([{ 
-        nome: fd.get('nome'), 
-        preco: parseFloat(fd.get('preco')) 
-      }]);
-      if (error) throw error;
-      setModalAdicionaisAberto(false);
-      await carregarTudoDoBanco();
-    } catch (error) { alert("Erro ao salvar adicional: " + error.message); }
-  };
-
   const dispararReimpressao = (venda) => {
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed'; iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0';
@@ -279,77 +254,6 @@ const gerarPagamentoMercadoPago = async () => {
     } else alert("Senha incorreta!");
   };
 
-const adicionarCategoria = async (nome) => {
-  const n = nome.trim().toUpperCase(); // Salvar em maiúsculo para combinar com o layout
-  if (!n) return;
-
-  try {
-    const { error } = await supabase
-      .from('categorias')
-      .insert([{ nome: n }]);
-
-    if (error) throw error;
-
-    setAvisoSucesso("Categoria adicionada!");
-    // Recarrega os dados do banco para atualizar a lista na tela
-    await carregarTudoDoBanco(); 
-    setModalCategoriasAberto(false);
-  } catch (error) {
-    alert("Erro ao salvar categoria: " + error.message);
-  }
-};
-  const removerCategoria = (cat) => {
-    if (window.confirm(`Deseja remover a categoria "${cat}"?`)) {
-      const novasCats = dados.categorias.filter(c => c !== cat);
-      const novosProds = { ...dados.produtos };
-      delete novosProds[cat];
-      setDados({ ...dados, categorias: novasCats, produtos: novosProds });
-    }
-  };
-
-const salvarProdutoAdmin = async (e) => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  
-  const dadosProd = {
-    titulo: fd.get('nome'),
-    preco: parseFloat(fd.get('preco')),
-    categoria: fd.get('categoria'),
-    img: "https://cdn-icons-png.flaticon.com/512/3075/3075977.png",
-    ingredientes: fd.get('ingredientes') ? fd.get('ingredientes').split(',').map(i => i.trim()) : [],
-    permiteAcrescimo: fd.get('permiteAcrescimo') === 'on', 
-    permitirRemover: fd.get('permitirRemover') === 'on',
-  };
-
-  try {
-    let erro;
-    if (produtoSendoEditado) {
-      // UPDATE no Supabase
-      const { error } = await supabase
-        .from('produtos')
-        .update(dadosProd)
-        .eq('id', produtoSendoEditado.id);
-      erro = error;
-    } else {
-      // INSERT no Supabase
-      const { error } = await supabase
-        .from('produtos')
-        .insert([dadosProd]);
-      erro = error;
-    }
-
-    if (erro) throw erro;
-
-    setModalAdminAberto(false);
-    setProdutoSendoEditado(null);
-    setAvisoSucesso("Cardápio Atualizado!");
-    
-    // Recarrega a página ou chama a função de atualizar
-    window.location.reload(); 
-  } catch (error) {
-    alert("Erro ao salvar no Supabase: " + error.message);
-  }
-};
 
 const salvarAdicionalAdmin = async (e) => {
   e.preventDefault();
