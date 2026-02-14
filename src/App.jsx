@@ -989,66 +989,101 @@ const deletarProduto = async (id) => {
       )}
 
       {/* --- MODAL FLUXO PAGAMENTO (MERCADO PAGO) --- */}
-      {modalFluxoAberto && (
-        <div className="fixed inset-0 bg-black/80 z-[210] flex items-center justify-center p-4 backdrop-blur-md">
-          <div className="bg-white w-full max-w-lg rounded-[3.5rem] p-10 shadow-2xl border-t-[12px] border-[#ffbc0d]">
-<p className="text-[10px] font-black text-gray-400 uppercase mb-3 italic text-center">Forma de Pagamento</p>
-<div className="grid grid-cols-2 gap-4 mb-8">
-    <button 
-        type="button"
-        onClick={() => setMetodoPagamento('local')} 
-        className={`p-4 rounded-3xl border-4 font-black text-[12px] uppercase transition-all flex flex-col items-center gap-2 ${metodoPagamento === 'local' ? 'border-green-600 bg-green-50 text-green-600 scale-105' : 'border-gray-100 text-gray-300'}`}
-    >
-        <span>💵</span>
-        <span>Na Entrega</span>
-    </button>
-    <button 
-        type="button"
-        onClick={() => setMetodoPagamento('online')} 
-        className={`p-4 rounded-3xl border-4 font-black text-[12px] uppercase transition-all flex flex-col items-center gap-2 ${metodoPagamento === 'online' ? 'border-blue-600 bg-blue-50 text-blue-600 scale-105' : 'border-gray-100 text-gray-300'}`}
-    >
-        <span>💳</span>
-        <span>Cartão/Pix</span>
-    </button>
-</div>
+{/* --- MODAL FLUXO PAGAMENTO ATUALIZADO --- */}
+{modalFluxoAberto && (
+  <div className="fixed inset-0 bg-black/80 z-[210] flex items-center justify-center p-4 backdrop-blur-md">
+    <div className="bg-white w-full max-w-lg rounded-[3.5rem] p-10 shadow-2xl border-t-[12px] border-[#ffbc0d]">
+      
+      <p className="text-[10px] font-black text-gray-400 uppercase mb-3 italic text-center">Forma de Pagamento</p>
+      <div className="grid grid-cols-2 gap-4 mb-8">
+        <button 
+          type="button"
+          onClick={() => setMetodoPagamento('local')} 
+          className={`p-4 rounded-3xl border-4 font-black text-[12px] uppercase transition-all flex flex-col items-center gap-2 ${metodoPagamento === 'local' ? 'border-green-600 bg-green-50 text-green-600 scale-105' : 'border-gray-100 text-gray-300'}`}
+        >
+          <span>💵</span> Na Entrega
+        </button>
+        <button 
+          type="button"
+          onClick={() => setMetodoPagamento('online')} 
+          className={`p-4 rounded-3xl border-4 font-black text-[12px] uppercase transition-all flex flex-col items-center gap-2 ${metodoPagamento === 'online' ? 'border-blue-600 bg-blue-50 text-blue-600 scale-105' : 'border-gray-100 text-gray-300'}`}
+        >
+          <span>💳</span> Cartão/Pix
+        </button>
+      </div>
 
-            <div className="grid grid-cols-1 gap-4 mb-8">
-              {[{ id: 'comer', label: 'Mesa Local', icon: '📍' }, { id: 'retirar', label: 'Balcão', icon: '🛍️' }, { id: 'entrega', label: 'Delivery', icon: '🚀' }].map((op) => (
-                <button 
-                  key={op.id} onClick={() => setOpcaoConsumo(op.id)} 
-                  className={`p-6 rounded-3xl border-4 font-black text-xl flex justify-between items-center ${opcaoConsumo === op.id ? 'border-[#db0007] bg-red-50 text-[#db0007]' : 'border-gray-100 text-gray-400 grayscale'}`}
-                >
-                  <span>{op.icon} {op.label}</span>
-                </button>
-              ))}
+      <p className="text-[10px] font-black text-gray-400 uppercase mb-3 italic text-center">Onde vai retirar?</p>
+      <div className="grid grid-cols-2 gap-4 mb-8">
+        <button 
+          onClick={() => setOpcaoConsumo('retirar')} 
+          className={`p-6 rounded-3xl border-4 font-black text-lg flex flex-col items-center gap-2 ${opcaoConsumo === 'retirar' ? 'border-red-600 bg-red-50 text-red-600' : 'border-gray-100 text-gray-400 grayscale'}`}
+        >
+          <span>🛍️</span> Balcão
+        </button>
+        <button 
+          onClick={() => setOpcaoConsumo('entrega')} 
+          className={`p-6 rounded-3xl border-4 font-black text-lg flex flex-col items-center gap-2 ${opcaoConsumo === 'entrega' ? 'border-red-600 bg-red-50 text-red-600' : 'border-gray-100 text-gray-400 grayscale'}`}
+        >
+          <span>🚀</span> Delivery
+        </button>
+      </div>
+
+      {/* CAMPOS DINÂMICOS */}
+      <div className="space-y-3 mb-6">
+        {/* Se for Online, pede telefone sempre */}
+        {metodoPagamento === 'online' && (
+          <input 
+            placeholder="Telefone (Obrigatório) *" 
+            required
+            className="w-full p-4 bg-gray-50 rounded-xl font-bold border-2 focus:border-blue-500 outline-none" 
+            value={dadosEntrega.telefone}
+            onChange={(e) => setDadosEntrega({...dadosEntrega, telefone: e.target.value})} 
+          />
+        )}
+
+        {/* Se for Delivery, pede endereço */}
+        {opcaoConsumo === 'entrega' && (
+          <>
+            <input placeholder="Seu Nome" className="w-full p-4 bg-gray-50 rounded-xl font-bold border-2" value={dadosEntrega.nome} onChange={(e) => setDadosEntrega({...dadosEntrega, nome: e.target.value})} />
+            <div className="flex gap-2">
+              <input placeholder="Rua" className="flex-[3] p-4 bg-gray-50 rounded-xl font-bold border-2" value={dadosEntrega.rua} onChange={(e) => setDadosEntrega({...dadosEntrega, rua: e.target.value})} />
+              <input placeholder="Nº" className="flex-1 p-4 bg-gray-50 rounded-xl font-bold border-2 text-center" value={dadosEntrega.numero} onChange={(e) => setDadosEntrega({...dadosEntrega, numero: e.target.value})} />
             </div>
+          </>
+        )}
 
-            {opcaoConsumo === 'entrega' && (
-              <div className="space-y-3 mb-6">
-                <input placeholder="Seu Nome" className="w-full p-4 bg-gray-50 rounded-xl font-bold border-2" onChange={(e) => setDadosEntrega({...dadosEntrega, nome: e.target.value})} />
-                <div className="flex gap-2">
-                  <input placeholder="Rua" className="flex-[3] p-4 bg-gray-50 rounded-xl font-bold border-2" onChange={(e) => setDadosEntrega({...dadosEntrega, rua: e.target.value})} />
-                  <input placeholder="Nº" className="flex-1 p-4 bg-gray-50 rounded-xl font-bold border-2 text-center" onChange={(e) => setDadosEntrega({...dadosEntrega, numero: e.target.value})} />
-                </div>
-              </div>
-            )}
+        {/* Referência (Opcional) - Aparece se for Online ou se for Delivery */}
+        {(metodoPagamento === 'online' || opcaoConsumo === 'entrega') && (
+          <input 
+            placeholder="Referência (Opcional)" 
+            className="w-full p-4 bg-gray-50 rounded-xl font-bold border-2" 
+            value={dadosEntrega.referencia}
+            onChange={(e) => setDadosEntrega({...dadosEntrega, referencia: e.target.value})} 
+          />
+        )}
+      </div>
 
-            <div className="border-t pt-8 text-center">
-              <p className="text-5xl font-black italic mb-8">R$ {(total + (opcaoConsumo === 'entrega' ? 5 : 0)).toFixed(2)}</p>
-              <div className="flex gap-4">
-                <button onClick={() => setModalFluxoAberto(false)} className="flex-1 font-bold text-gray-400">Voltar</button>
-                <button 
-                  disabled={!opcaoConsumo || processandoMP} 
-                  onClick={finalizarPedidoTotal} 
-                  className="flex-[2] bg-green-600 text-white py-6 rounded-[2rem] font-black text-2xl uppercase italic active:scale-95 transition-all disabled:opacity-30"
-                >
-                  {processandoMP ? '...' : 'Confirmar'}
-                </button>
-              </div>
-            </div>
-          </div>
+      <div className="border-t pt-8 text-center">
+        <p className="text-5xl font-black italic mb-8">R$ {(total + (opcaoConsumo === 'entrega' ? 5 : 0)).toFixed(2)}</p>
+        <div className="flex gap-4">
+          <button onClick={() => setModalFluxoAberto(false)} className="flex-1 font-bold text-gray-400">Voltar</button>
+          <button 
+            disabled={
+              !opcaoConsumo || 
+              (metodoPagamento === 'online' && !dadosEntrega.telefone) || 
+              (opcaoConsumo === 'entrega' && (!dadosEntrega.rua || !dadosEntrega.numero)) ||
+              processandoMP
+            } 
+            onClick={finalizarPedidoTotal} 
+            className="flex-[2] bg-green-600 text-white py-6 rounded-[2rem] font-black text-2xl uppercase italic active:scale-95 transition-all disabled:opacity-30"
+          >
+            {processandoMP ? '...' : 'Confirmar'}
+          </button>
         </div>
-      )}
+      </div>
+    </div>
+  </div>
+)}
 
       {/* ANIMAÇÃO DE SUCESSO */}
       {senhaGerada && (
