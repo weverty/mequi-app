@@ -402,13 +402,17 @@ const adicionarAoCarrinho = () => {
 };
 
 const finalizarPedidoTotal = async () => {
-  // Se o método for online, chama o Mercado Pago em vez de finalizar direto
+  console.log("Iniciando finalização. Método:", metodoPagamento);
+
+  // 1. Lógica para Mercado Pago (Online)
   if (metodoPagamento === 'online') {
+    // Salva o total e o carrinho no localStorage para recuperar na volta do MP
+    localStorage.setItem('mequi_total_temp', (total + (opcaoConsumo === 'entrega' ? 5 : 0)).toString());
     await gerarPagamentoMercadoPago();
-    return; // Para a execução aqui, o resto acontece na volta do MP
+    return; 
   }
 
-  // Se for local (na entrega), segue o fluxo normal do Supabase
+  // 2. Lógica para Pagamento Local (Supabase)
   try {
     setProcessandoMP(true);
     const senha = Math.floor(Math.random() * 900) + 100;
@@ -421,27 +425,32 @@ const finalizarPedidoTotal = async () => {
       tipo: opcaoConsumo,
       info: infoDestino,
       totalfinal: total + (opcaoConsumo === 'entrega' ? 5 : 0),
-      status: 'pendente_pagamento_local' 
+      status: 'pendente_local' 
     };
 
-    const { error } = await supabase.from('pedidos').insert([novoPedido]);
+    console.log("Enviando para o Supabase...", novoPedido);
 
-    if (error) throw error;
+    const { data, error } = await supabase.from('pedidos').insert([novoPedido]).select();
+
+    if (error) {
+      console.error("Erro do Supabase:", error);
+      alert("Erro no banco: " + error.message);
+      return;
+    }
+
+    console.log("Sucesso no Supabase:", data);
 
     setSenhaGerada(senha);
-    // Salva no histórico local também
-    setHistoricoVendas(prev => [{...novoPedido, id: Date.now(), data: new Date().toLocaleDateString(), hora: new Date().toLocaleTimeString()}, ...prev]);
-    
-    setTimeout(() => {
-      setSenhaGerada(null);
-      setCarrinho([]);
-      setTotal(0);
-      setModalFluxoAberto(false);
-      setOpcaoConsumo('');
-    }, 3000);
+    setCarrinho([]);
+    setTotal(0);
+    localStorage.removeItem('mequi_carrinho');
+    setModalFluxoAberto(false);
+
+    setTimeout(() => setSenhaGerada(null), 4000);
 
   } catch (err) {
-    alert("Erro ao salvar pedido: " + err.message);
+    console.error("Erro crítico na função:", err);
+    alert("Erro interno: " + err.message);
   } finally {
     setProcessandoMP(false);
   }
