@@ -454,8 +454,7 @@ const finalizarPedidoTotal = async () => {
       tipo: opcaoConsumo,
       info: `${infoDestino} | CLIENTE: ${dadosEntrega.nome} | TEL: ${dadosEntrega.telefone} | PGTO: ${detalhePgto}`,
       totalfinal: totalComTaxa,
-      status: 'pendente_local',
-      data: new Date().toLocaleString()
+      status: 'pendente_local'
     };
 
     // Salva no Supabase
