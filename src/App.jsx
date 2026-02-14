@@ -55,18 +55,26 @@ const [historicoVendas, setHistoricoVendas] = useState(() => {
   return salvo ? JSON.parse(salvo) : [];
 });
 
-  // 1. Altere a inicialização do carrinho para ler do localStorage
+// 1. Carrinho com fallback seguro
   const [carrinho, setCarrinho] = useState(() => {
-    const salvo = localStorage.getItem('mequi_carrinho');
-    return salvo ? JSON.parse(salvo) : [];
+    try {
+      const salvo = localStorage.getItem('mequi_carrinho');
+      return salvo ? JSON.parse(salvo) : [];
+    } catch (e) {
+      return [];
+    }
   });
 
-  // 2. Altere a inicialização do total para calcular baseado no carrinho salvo
+  // 2. Total calculado de forma robusta
   const [total, setTotal] = useState(() => {
-    const salvo = localStorage.getItem('mequi_carrinho');
-    if (salvo) {
-      const itens = JSON.parse(salvo);
-      return itens.reduce((acc, item) => acc + item.precoFinal, 0);
+    try {
+      const salvo = localStorage.getItem('mequi_carrinho');
+      if (salvo) {
+        const itens = JSON.parse(salvo);
+        return itens.reduce((acc, item) => acc + (Number(item.precoFinal) || 0), 0);
+      }
+    } catch (e) {
+      console.error("Erro ao carregar total:", e);
     }
     return 0;
   });
@@ -370,8 +378,9 @@ const adicionarAoCarrinho = () => {
     instanceId: Math.random() 
   };
 
-  setTotal(prev => prev + precoFinal);
-  setCarrinho(prev => [...prev, itemParaCarrinho]);
+  // Use a função de atualização para garantir o valor correto
+  setTotal(prevTotal => prevTotal + precoFinal);
+  setCarrinho(prevCarrinho => [...prevCarrinho, itemParaCarrinho]);
   setItemEmPersonalizacao(null);
 };
 
