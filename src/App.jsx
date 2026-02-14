@@ -1090,7 +1090,6 @@ const deletarProduto = async (id) => {
     </div>
   </div>
 )}
-      <TelaSucesso />
 
     </div>
   );
