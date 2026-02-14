@@ -385,52 +385,32 @@ const adicionarAoCarrinho = () => {
 };
 
 const finalizarPedidoTotal = async () => {
-  if (metodoPagamento === 'online') {
-    gerarPagamentoMercadoPago();
-    return;
-  }
-
   const senha = Math.floor(Math.random() * 900) + 100;
+  const infoDestino = opcaoConsumo === 'comer' ? `Mesa ${dadosEntrega.mesa}` : 
+                     opcaoConsumo === 'entrega' ? `${dadosEntrega.rua}, ${dadosEntrega.numero}` : 'Balcão';
   
-  const itensFormatados = carrinho.map(it => ({
-    nome: it.titulo || it.nome,
-    precoFinal: it.precoFinal,
-    adicionais: it.adicionaisEscolhidos?.map(a => a.nome) || [],
-    removidos: it.removidos || [] 
-  }));
+  const totalComTaxa = total + (opcaoConsumo === 'entrega' ? 5 : 0);
 
   const novoPedido = {
-    id: Date.now(),
-    senha,
-    itens: itensFormatados, 
-    tipo: opcaoConsumo, 
-    info: opcaoConsumo === 'comer' ? `Mesa ${dadosEntrega.mesa}` : opcaoConsumo === 'entrega' ? `${dadosEntrega.rua}, ${dadosEntrega.numero}` : 'Balcão',
-    hora: new Date().toLocaleTimeString(),
-    data: new Date().toLocaleDateString(),
-    subtotal: total,
-    taxa: opcaoConsumo === 'entrega' ? 5 : 0,
-    totalFinal: total + (opcaoConsumo === 'entrega' ? 5 : 0),
-    pagamento: 'Local'
+    senha: senha.toString(),
+    itens: carrinho, // O Supabase salva o array de itens automaticamente
+    tipo: opcaoConsumo,
+    info: infoDestino,
+    totalfinal: totalComTaxa,
+    status: 'pago'
   };
 
-  // 1. Atualiza estados
-  setHistoricoVendas(prev => [novoPedido, ...prev]);
-  setPedidosCozinha(prev => [novoPedido, ...prev]);
-  setSenhaGerada(senha);
+  // MÁGICA AQUI: Salva no Banco de Dados Real
+  const { error } = await supabase.from('pedidos').insert([novoPedido]);
 
-  // 2. DISPARA A IMPRESSÃO (O cupom lerá os dados do carrinho atual antes de limpar)
-  setTimeout(() => {
-    window.print(); 
-
-    // 3. LIMPA O CARRINHO SOMENTE APÓS O COMANDO DE IMPRESSÃO
-    setCarrinho([]); 
-    setTotal(0); 
-    setModalFluxoAberto(false); 
-    setOpcaoConsumo(''); 
-    setDadosEntrega({ nome: '', telefone: '', rua: '', numero: '', referencia: '', mesa: '' });
-  }, 1000);
-
-  setTimeout(() => setSenhaGerada(null), 5000);
+  if (error) {
+    alert("Erro ao salvar no banco: " + error.message);
+  } else {
+    setSenhaGerada(senha);
+    // Limpa tudo
+    setTimeout(() => setSenhaGerada(null), 3000);
+    setCarrinho([]); setTotal(0); setModalFluxoAberto(false);
+  }
 };
 
   // --- RENDER MONITOR ---
