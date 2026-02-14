@@ -161,30 +161,36 @@ useEffect(() => {
   };
 
 const removerCategoria = async (cat) => {
-  if (window.confirm(`AVISO CRÍTICO: Excluir a categoria "${cat}" apagará TODOS os produtos dentro dela. Confirmar?`)) {
+  if (window.confirm(`AVISO: Isso apagará a categoria "${cat}" e todos os produtos nela. Deseja continuar?`)) {
     try {
-      // 1. Apaga os produtos vinculados a essa categoria primeiro (evita erro de chave estrangeira)
-      const { error: errorProdutos } = await supabase
+      // 1. Primeiro, apagamos os produtos que pertencem a essa categoria
+      const { error: erroProdutos } = await supabase
         .from('produtos')
         .delete()
         .eq('categoria', cat);
 
-      if (errorProdutos) throw errorProdutos;
+      if (erroProdutos) throw erroProdutos;
 
-      // 2. Agora apaga a categoria
-      const { error: errorCat } = await supabase
+      // 2. Depois, apagamos a categoria em si
+      const { error: erroCat } = await supabase
         .from('categorias')
         .delete()
         .eq('nome', cat);
 
-      if (errorCat) throw errorCat;
+      if (erroCat) throw erroCat;
 
-      setAvisoSucesso("Categoria e produtos removidos!");
-      await carregarTudoDoBanco(); // Atualiza a tela sem dar F5
+      // 3. Sucesso: Feedback visual e atualização
+      setAvisoSucesso("Categoria removida com sucesso!");
       
+      // Faz o balão sumir após 3 segundos
+      setTimeout(() => setAvisoSucesso(null), 3000);
+
+      // Recarrega os dados para a lista atualizar na tela
+      await carregarTudoDoBanco();
+
     } catch (error) {
-      console.error("Erro ao excluir:", error);
-      alert("Erro ao excluir: " + error.message);
+      console.error("Erro ao remover:", error);
+      alert("Não foi possível remover: " + error.message);
     }
   }
 };
