@@ -831,21 +831,21 @@ const deletarProduto = async (id) => {
     <p className="text-[10px] font-black text-orange-500 uppercase mb-4 italic tracking-widest text-center">Turbinar seu pedido?</p>
     <div className="space-y-3">
       {dados.adicionais.map(adc => {
-        // COMPARAÇÃO POR _ID ÚNICO DO MONGODB
-        const estaSelecionado = itemEmPersonalizacao.adicionaisEscolhidos?.some(item => item._id === adc._id);
+        // MÁGICA AQUI: Verificamos se ESTE ID específico está na lista de escolhidos
+        const estaSelecionado = itemEmPersonalizacao.adicionaisEscolhidos?.some(item => item.id === adc.id);
 
         return (
           <button 
-            key={adc._id} 
+            key={adc.id} 
             onClick={() => {
               const listaAtual = itemEmPersonalizacao.adicionaisEscolhidos || [];
               let novaLista;
 
               if (estaSelecionado) {
-                // Remove apenas o item clicado comparando o _id
-                novaLista = listaAtual.filter(item => item._id !== adc._id);
+                // Se já estava lá, removemos apenas esse ID
+                novaLista = listaAtual.filter(item => item.id !== adc.id);
               } else {
-                // Adiciona o item clicado à lista
+                // Se não estava, adicionamos esse objeto à lista
                 novaLista = [...listaAtual, adc];
               }
 
@@ -854,7 +854,7 @@ const deletarProduto = async (id) => {
             className={`w-full flex justify-between items-center p-4 rounded-2xl border-4 font-black italic transition-all ${
               estaSelecionado 
               ? 'border-orange-500 bg-orange-50 scale-[0.98]' 
-              : 'border-gray-100 bg-white'
+              : 'border-gray-100 bg-white opacity-60'
             }`}
           >
             <span className="text-xs uppercase">{adc.nome}</span> 
