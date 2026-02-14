@@ -195,35 +195,43 @@ const removerCategoria = async (cat) => {
   }
 };
 
-  const salvarProdutoAdmin = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const dadosProd = {
-      titulo: fd.get('nome'),
-      preco: parseFloat(fd.get('preco')),
-      categoria: fd.get('categoria'),
-      img: "https://cdn-icons-png.flaticon.com/512/3075/3075977.png",
-      ingredientes: fd.get('ingredientes') ? fd.get('ingredientes').split(',').map(i => i.trim()) : [],
-      permiteAcrescimo: fd.get('permiteAcrescimo') === 'on', 
-      permitirRemover: fd.get('permitirRemover') === 'on',
-    };
+const salvarProdutoAdmin = async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  
+  // Pegamos a imagem do input. Se estiver vazio, usamos uma imagem padrão de hambúrguer.
+  const linkImagem = fd.get('imgUrl') || "https://cdn-icons-png.flaticon.com/512/3075/3075977.png";
 
-    try {
-      let erro;
-      if (produtoSendoEditado) {
-        const { error } = await supabase.from('produtos').update(dadosProd).eq('id', produtoSendoEditado.id);
-        erro = error;
-      } else {
-        const { error } = await supabase.from('produtos').insert([dadosProd]);
-        erro = error;
-      }
-      if (erro) throw erro;
-      setModalAdminAberto(false);
-      setProdutoSendoEditado(null);
-      setAvisoSucesso("Cardápio Atualizado!");
-      await carregarTudoDoBanco();
-    } catch (error) { alert("Erro ao salvar no Supabase: " + error.message); }
+  const dadosProd = {
+    titulo: fd.get('nome'),
+    preco: parseFloat(fd.get('preco')),
+    categoria: fd.get('categoria'),
+    img: linkImagem, // Salvando o link enviado
+    ingredientes: fd.get('ingredientes') ? fd.get('ingredientes').split(',').map(i => i.trim()) : [],
+    permiteAcrescimo: fd.get('permiteAcrescimo') === 'on', 
+    permitirRemover: fd.get('permitirRemover') === 'on',
   };
+
+  try {
+    let erro;
+    if (produtoSendoEditado) {
+      const { error } = await supabase.from('produtos').update(dadosProd).eq('id', produtoSendoEditado.id);
+      erro = error;
+    } else {
+      const { error } = await supabase.from('produtos').insert([dadosProd]);
+      erro = error;
+    }
+    
+    if (erro) throw erro;
+
+    setAvisoSucesso("Produto atualizado com sucesso!");
+    setModalAdminAberto(false);
+    setProdutoSendoEditado(null);
+    await carregarTudoDoBanco();
+  } catch (error) { 
+    alert("Erro ao salvar: " + error.message); 
+  }
+};
 
   const dispararReimpressao = (venda) => {
     const iframe = document.createElement('iframe');
@@ -723,6 +731,7 @@ const deletarProduto = async (id) => {
             <h2 className="text-2xl font-black uppercase italic mb-6 text-center text-blue-600 tracking-tighter">Configurar Item</h2>
             <div className="space-y-4">
               <input name="nome" defaultValue={produtoSendoEditado?.nome} placeholder="Nome do Produto" required className="w-full p-4 bg-gray-100 rounded-2xl font-bold" />
+              <input name="imgUrl" defaultValue={produtoSendoEditado?.img} placeholder="URL da Imagem (Imgur, etc.)" className="w-full p-4 bg-gray-100 rounded-2xl font-bold border-2 border-blue-100" />
               <input name="preco" type="number" step="0.01" defaultValue={produtoSendoEditado?.preco} placeholder="Preço (Ex: 29.90)" required className="w-full p-4 bg-gray-100 rounded-2xl font-bold" />
               <input name="ingredientes" defaultValue={produtoSendoEditado?.ingredientes?.join(', ')} placeholder="Ingredientes (separados por vírgula)" className="w-full p-4 bg-gray-100 rounded-2xl font-bold" />
               
