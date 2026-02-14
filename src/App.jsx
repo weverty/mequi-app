@@ -535,7 +535,7 @@ const deletarProduto = async (id) => {
       if (response.ok) {
         setAvisoSucesso("Produto removido com sucesso!");
         await carregarTudoDoBanco();
-        setTimeout(() => setAvisoSucesso(null), 3000);
+        setTimeout(() => setAvisoSucesso(null), 2000);
       }
     } catch (error) {
       alert("Erro ao excluir produto.");
