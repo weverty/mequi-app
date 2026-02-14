@@ -38,6 +38,9 @@ const [pedidoFinalizado, setPedidoFinalizado] = useState(() => {
   return salvo ? JSON.parse(salvo) : null;
 });
 
+const [metodoLocalDetallhe, setMetodoLocalDetallhe] = useState(''); // 'troco', 'maquininha' ou 'pix_maquina'
+const [valorTroco, setValorTroco] = useState('');
+
   // DADOS E HISTÓRICO
   const [dados, setDados] = useState(() => {
     const salvo = localStorage.getItem('mequi_vFinal_data');
@@ -409,55 +412,79 @@ const adicionarAoCarrinho = () => {
 };
 
 const finalizarPedidoTotal = async () => {
-  console.log("Iniciando finalização. Método:", metodoPagamento);
-
-  // 1. Lógica para Mercado Pago (Online)
-  if (metodoPagamento === 'online') {
-    // Salva o total e o carrinho no localStorage para recuperar na volta do MP
-    localStorage.setItem('mequi_total_temp', (total + (opcaoConsumo === 'entrega' ? 5 : 0)).toString());
-    await gerarPagamentoMercadoPago();
-    return; 
-  }
-
-  // 2. Lógica para Pagamento Local (Supabase)
   try {
     setProcessandoMP(true);
     const senha = Math.floor(Math.random() * 900) + 100;
-    const infoDestino = opcaoConsumo === 'comer' ? `Mesa ${dadosEntrega.mesa}` : 
-                       opcaoConsumo === 'entrega' ? `${dadosEntrega.rua}, ${dadosEntrega.numero}` : 'Balcão';
+    const taxaEntrega = opcaoConsumo === 'entrega' ? 5 : 0;
+    const totalComTaxa = total + taxaEntrega;
+
+    // --- LOGICA PARA PAGAMENTO ONLINE (MERCADO PAGO) ---
+    if (metodoPagamento === 'online') {
+      // 1. Salva tudo no localStorage para recuperar quando o cliente voltar do site do banco
+      localStorage.setItem('mequi_total_temp', totalComTaxa.toString());
+      localStorage.setItem('mequi_carrinho_temp', JSON.stringify(carrinho));
+      localStorage.setItem('mequi_dados_cliente', JSON.stringify({
+        ...dadosEntrega,
+        opcaoConsumo: opcaoConsumo
+      }));
+
+      // 2. Chama a função que faz o redirecionamento
+      await gerarPagamentoMercadoPago();
+      return; // Interrompe aqui, pois o cliente vai sair da página
+    }
+
+    // --- LOGICA PARA PAGAMENTO LOCAL (NA ENTREGA OU NA RETIRADA) ---
     
+    // Define a descrição do local que aparecerá no Monitor/Cozinha
+    let infoDestino = "";
+    if (opcaoConsumo === 'retirar') {
+      infoDestino = `📍 RETIRADA NO BALCÃO`;
+    } else {
+      infoDestino = `🚀 ENTREGA: ${dadosEntrega.rua}, ${dadosEntrega.numero} (${dadosEntrega.referencia})`;
+    }
+
+    // Define o detalhe do pagamento para o Log
+    const detalhePgto = metodoPagamento === 'retirada_local' 
+      ? "PAGAR NA RETIRADA" 
+      : (metodoLocalDetallhe === 'troco' ? `DINHEIRO (Troco p/ ${valorTroco})` : `CARTÃO/PIX (Levar Maquininha)`);
+
     const novoPedido = {
       senha: senha.toString(),
       itens: carrinho,
       tipo: opcaoConsumo,
-      info: infoDestino,
-      totalfinal: total + (opcaoConsumo === 'entrega' ? 5 : 0),
-      status: 'pendente_local' 
+      info: `${infoDestino} | CLIENTE: ${dadosEntrega.nome} | TEL: ${dadosEntrega.telefone} | PGTO: ${detalhePgto}`,
+      totalfinal: totalComTaxa,
+      status: 'pendente_local',
+      data: new Date().toLocaleString()
     };
 
-    console.log("Enviando para o Supabase...", novoPedido);
-
-    const { data, error } = await supabase.from('pedidos').insert([novoPedido]).select();
+    // Salva no Supabase
+    const { data, error } = await supabase
+      .from('pedidos')
+      .insert([novoPedido])
+      .select();
 
     if (error) {
-      console.error("Erro do Supabase:", error);
-      alert("Erro no banco: " + error.message);
+      console.error("Erro Supabase:", error);
+      alert("Erro ao salvar no banco: " + error.message);
       return;
     }
 
-    console.log("Sucesso no Supabase:", data);
-
+    // Sucesso: Gera a senha na tela e limpa tudo
     setSenhaGerada(senha);
+    
+    // Limpa os estados e o carrinho
     setCarrinho([]);
     setTotal(0);
     localStorage.removeItem('mequi_carrinho');
     setModalFluxoAberto(false);
 
-    setTimeout(() => setSenhaGerada(null), 4000);
+    // Remove a senha da tela após 5 segundos
+    setTimeout(() => setSenhaGerada(null), 5000);
 
   } catch (err) {
-    console.error("Erro crítico na função:", err);
-    alert("Erro interno: " + err.message);
+    console.error("Erro crítico:", err);
+    alert("Ocorreu um erro interno. Tente novamente.");
   } finally {
     setProcessandoMP(false);
   }
@@ -988,101 +1015,141 @@ const deletarProduto = async (id) => {
         </div>
       )}
 
-      {/* --- MODAL FLUXO PAGAMENTO (MERCADO PAGO) --- */}
-{/* --- MODAL FLUXO PAGAMENTO ATUALIZADO --- */}
+{/* --- MODAL FLUXO PAGAMENTO CORRIGIDO --- */}
 {modalFluxoAberto && (
   <div className="fixed inset-0 bg-black/80 z-[210] flex items-center justify-center p-4 backdrop-blur-md">
-    <div className="bg-white w-full max-w-lg rounded-[3.5rem] p-10 shadow-2xl border-t-[12px] border-[#ffbc0d]">
+    <div className="bg-white w-full max-w-lg rounded-[3.5rem] p-10 shadow-2xl border-t-[12px] border-[#ffbc0d] max-h-[90vh] overflow-y-auto">
       
-      <p className="text-[10px] font-black text-gray-400 uppercase mb-3 italic text-center">Forma de Pagamento</p>
-      <div className="grid grid-cols-2 gap-4 mb-8">
+      <p className="text-[10px] font-black text-gray-400 uppercase mb-3 italic text-center">Como deseja pagar?</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
         <button 
           type="button"
-          onClick={() => setMetodoPagamento('local')} 
-          className={`p-4 rounded-3xl border-4 font-black text-[12px] uppercase transition-all flex flex-col items-center gap-2 ${metodoPagamento === 'local' ? 'border-green-600 bg-green-50 text-green-600 scale-105' : 'border-gray-100 text-gray-300'}`}
+          onClick={() => { setMetodoPagamento('local'); setOpcaoConsumo('entrega'); }} 
+          className={`p-4 rounded-3xl border-4 font-black text-[10px] uppercase transition-all flex flex-col items-center gap-2 ${metodoPagamento === 'local' && opcaoConsumo === 'entrega' ? 'border-green-600 bg-green-50 text-green-600 scale-105' : 'border-gray-100 text-gray-300'}`}
         >
-          <span>💵</span> Na Entrega
+          <span>🚀</span> Na Entrega
         </button>
+
         <button 
           type="button"
-          onClick={() => setMetodoPagamento('online')} 
-          className={`p-4 rounded-3xl border-4 font-black text-[12px] uppercase transition-all flex flex-col items-center gap-2 ${metodoPagamento === 'online' ? 'border-blue-600 bg-blue-50 text-blue-600 scale-105' : 'border-gray-100 text-gray-300'}`}
+          onClick={() => { setMetodoPagamento('retirada_local'); setOpcaoConsumo('retirar'); }} 
+          className={`p-4 rounded-3xl border-4 font-black text-[10px] uppercase transition-all flex flex-col items-center gap-2 ${metodoPagamento === 'retirada_local' ? 'border-orange-500 bg-orange-50 text-orange-500 scale-105' : 'border-gray-100 text-gray-300'}`}
         >
-          <span>💳</span> Cartão/Pix
+          <span>🛍️</span> Na Retirada
+        </button>
+
+        <button 
+          type="button"
+          onClick={() => { setMetodoPagamento('online'); setOpcaoConsumo(''); }} // Reset da opção para obrigar a escolha abaixo
+          className={`p-4 rounded-3xl border-4 font-black text-[10px] uppercase transition-all flex flex-col items-center gap-2 ${metodoPagamento === 'online' ? 'border-blue-600 bg-blue-50 text-blue-600 scale-105' : 'border-gray-100 text-gray-300'}`}
+        >
+          <span>💳</span> Cartão/Pix Online
         </button>
       </div>
 
-      <p className="text-[10px] font-black text-gray-400 uppercase mb-3 italic text-center">Onde vai retirar?</p>
-      <div className="grid grid-cols-2 gap-4 mb-8">
-        <button 
-          onClick={() => setOpcaoConsumo('retirar')} 
-          className={`p-6 rounded-3xl border-4 font-black text-lg flex flex-col items-center gap-2 ${opcaoConsumo === 'retirar' ? 'border-red-600 bg-red-50 text-red-600' : 'border-gray-100 text-gray-400 grayscale'}`}
-        >
-          <span>🛍️</span> Balcão
-        </button>
-        <button 
-          onClick={() => setOpcaoConsumo('entrega')} 
-          className={`p-6 rounded-3xl border-4 font-black text-lg flex flex-col items-center gap-2 ${opcaoConsumo === 'entrega' ? 'border-red-600 bg-red-50 text-red-600' : 'border-gray-100 text-gray-400 grayscale'}`}
-        >
-          <span>🚀</span> Delivery
-        </button>
-      </div>
+      {/* SE FOR ONLINE, PRECISAMOS SABER SE É RETIRADA OU DELIVERY ANTES DE PAGAR */}
+      {metodoPagamento === 'online' && (
+        <div className="animate-fadeIn mb-6">
+          <p className="text-[10px] font-black text-gray-400 uppercase mb-3 italic text-center">Onde vai receber seu pedido online?</p>
+          <div className="grid grid-cols-2 gap-4">
+            <button onClick={() => setOpcaoConsumo('retirar')} className={`p-4 rounded-2xl border-4 font-black text-xs flex flex-col items-center gap-1 ${opcaoConsumo === 'retirar' ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-gray-100 text-gray-400'}`}>🛍️ Retirar</button>
+            <button onClick={() => setOpcaoConsumo('entrega')} className={`p-4 rounded-2xl border-4 font-black text-xs flex flex-col items-center gap-1 ${opcaoConsumo === 'entrega' ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-gray-100 text-gray-400'}`}>🚀 Delivery</button>
+          </div>
+        </div>
+      )}
 
-      {/* CAMPOS DINÂMICOS */}
+      {/* CAMPOS DE DADOS - SÓ APARECEM SE A OPÇÃO DE CONSUMO FOR SELECIONADA */}
       <div className="space-y-3 mb-6">
-        {/* Se for Online, pede telefone sempre */}
-        {metodoPagamento === 'online' && (
-          <input 
-            placeholder="Telefone (Obrigatório) *" 
-            required
-            className="w-full p-4 bg-gray-50 rounded-xl font-bold border-2 focus:border-blue-500 outline-none" 
-            value={dadosEntrega.telefone}
-            onChange={(e) => setDadosEntrega({...dadosEntrega, telefone: e.target.value})} 
-          />
+        {(opcaoConsumo === 'retirar' || opcaoConsumo === 'entrega') && (
+          <div className="space-y-3 animate-fadeIn">
+            <p className="text-[10px] font-black text-gray-400 uppercase italic text-center">Seus Dados</p>
+            <input placeholder="Seu Nome *" className="w-full p-4 bg-gray-50 rounded-xl font-bold border-2 outline-none focus:border-blue-500" value={dadosEntrega.nome} onChange={(e) => setDadosEntrega({...dadosEntrega, nome: e.target.value})} />
+            <input placeholder="Telefone *" className="w-full p-4 bg-gray-50 rounded-xl font-bold border-2 outline-none focus:border-blue-500" value={dadosEntrega.telefone} onChange={(e) => setDadosEntrega({...dadosEntrega, telefone: e.target.value})} />
+          </div>
         )}
 
-        {/* Se for Delivery, pede endereço */}
         {opcaoConsumo === 'entrega' && (
-          <>
-            <input placeholder="Seu Nome" className="w-full p-4 bg-gray-50 rounded-xl font-bold border-2" value={dadosEntrega.nome} onChange={(e) => setDadosEntrega({...dadosEntrega, nome: e.target.value})} />
+          <div className="space-y-3 animate-fadeIn">
             <div className="flex gap-2">
               <input placeholder="Rua" className="flex-[3] p-4 bg-gray-50 rounded-xl font-bold border-2" value={dadosEntrega.rua} onChange={(e) => setDadosEntrega({...dadosEntrega, rua: e.target.value})} />
               <input placeholder="Nº" className="flex-1 p-4 bg-gray-50 rounded-xl font-bold border-2 text-center" value={dadosEntrega.numero} onChange={(e) => setDadosEntrega({...dadosEntrega, numero: e.target.value})} />
             </div>
-          </>
-        )}
-
-        {/* Referência (Opcional) - Aparece se for Online ou se for Delivery */}
-        {(metodoPagamento === 'online' || opcaoConsumo === 'entrega') && (
-          <input 
-            placeholder="Referência (Opcional)" 
-            className="w-full p-4 bg-gray-50 rounded-xl font-bold border-2" 
-            value={dadosEntrega.referencia}
-            onChange={(e) => setDadosEntrega({...dadosEntrega, referencia: e.target.value})} 
-          />
+            <input placeholder="Referência (Opcional)" className="w-full p-4 bg-gray-50 rounded-xl font-bold border-2" value={dadosEntrega.referencia} onChange={(e) => setDadosEntrega({...dadosEntrega, referencia: e.target.value})} />
+          </div>
         )}
       </div>
+
+      {/* OPÇÕES DE PAGAMENTO PARA ENTREGA LOCAL */}
+{metodoPagamento === 'local' && (
+  <div className="space-y-4 mb-8 bg-gray-50 p-6 rounded-3xl border-2 border-dashed border-gray-200 animate-fadeIn">
+    <p className="text-[10px] font-black text-gray-400 uppercase italic text-center">Como vai pagar ao entregador?</p>
+    
+    <div className="grid grid-cols-3 gap-2">
+      <button 
+        type="button"
+        onClick={() => setMetodoLocalDetallhe('troco')} 
+        className={`p-3 rounded-2xl border-2 font-black text-[9px] uppercase transition-all ${metodoLocalDetallhe === 'troco' ? 'border-green-600 bg-green-50 text-green-600' : 'border-white bg-white text-gray-400'}`}
+      >
+        💵 Troco
+      </button>
+      
+      <button 
+        type="button"
+        onClick={() => setMetodoLocalDetallhe('maquininha')} 
+        className={`p-3 rounded-2xl border-2 font-black text-[9px] uppercase transition-all ${metodoLocalDetallhe === 'maquininha' ? 'border-green-600 bg-green-50 text-green-600' : 'border-white bg-white text-gray-400'}`}
+      >
+        💳 Cartão
+      </button>
+      
+      <button 
+        type="button"
+        onClick={() => setMetodoLocalDetallhe('pix_maquina')} 
+        className={`p-3 rounded-2xl border-2 font-black text-[9px] uppercase transition-all ${metodoLocalDetallhe === 'pix_maquina' ? 'border-green-600 bg-green-50 text-green-600' : 'border-white bg-white text-gray-400'}`}
+      >
+        📱 Pix Maq.
+      </button>
+    </div>
+
+    {/* CAMPO DE VALOR DO TROCO */}
+    {metodoLocalDetallhe === 'troco' && (
+      <div className="animate-slideDown">
+        <input 
+          type="number" 
+          placeholder="Troco para quanto? (Ex: 50)" 
+          className="w-full p-4 bg-white rounded-xl font-bold border-2 border-green-200 outline-none focus:border-green-500" 
+          value={valorTroco} 
+          onChange={(e) => setValorTroco(e.target.value)} 
+        />
+      </div>
+    )}
+  </div>
+)}
 
       <div className="border-t pt-8 text-center">
         <p className="text-5xl font-black italic mb-8">R$ {(total + (opcaoConsumo === 'entrega' ? 5 : 0)).toFixed(2)}</p>
         <div className="flex gap-4">
           <button onClick={() => setModalFluxoAberto(false)} className="flex-1 font-bold text-gray-400">Voltar</button>
-          <button 
-            disabled={
-              !opcaoConsumo || 
-              (metodoPagamento === 'online' && !dadosEntrega.telefone) || 
-              (opcaoConsumo === 'entrega' && (!dadosEntrega.rua || !dadosEntrega.numero)) ||
-              processandoMP
-            } 
-            onClick={finalizarPedidoTotal} 
-            className="flex-[2] bg-green-600 text-white py-6 rounded-[2rem] font-black text-2xl uppercase italic active:scale-95 transition-all disabled:opacity-30"
-          >
-            {processandoMP ? '...' : 'Confirmar'}
-          </button>
+<button 
+  disabled={
+    !opcaoConsumo || 
+    !dadosEntrega.nome || 
+    !dadosEntrega.telefone || 
+    (opcaoConsumo === 'entrega' && (!dadosEntrega.rua || !dadosEntrega.numero)) ||
+    (metodoPagamento === 'local' && !metodoLocalDetallhe) || // Nova validação
+    (metodoLocalDetallhe === 'troco' && !valorTroco) ||     // Validação do troco
+    processandoMP
+  } 
+  onClick={finalizarPedidoTotal} 
+  className="flex-[2] bg-green-600 text-white py-6 rounded-[2rem] font-black text-2xl uppercase italic active:scale-95 transition-all disabled:opacity-30"
+>
+  {processandoMP ? '...' : metodoPagamento === 'online' ? 'Ir para Pagamento' : 'Confirmar Pedido'}
+</button>
         </div>
       </div>
     </div>
   </div>
+
+  
 )}
 
       {/* ANIMAÇÃO DE SUCESSO */}
