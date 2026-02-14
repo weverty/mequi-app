@@ -118,6 +118,17 @@ const [historicoVendas, setHistoricoVendas] = useState(() => {
   };
 
   // --- EFEITOS DE INICIALIZAÇÃO E PERSISTÊNCIA ---
+
+  // Faz o balão de aviso sumir após 3 segundos automaticamente
+useEffect(() => {
+  if (avisoSucesso) {
+    const timer = setTimeout(() => {
+      setAvisoSucesso(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }
+}, [avisoSucesso]);
+
   useEffect(() => {
     carregarTudoDoBanco();
   }, []);
@@ -149,17 +160,34 @@ const [historicoVendas, setHistoricoVendas] = useState(() => {
     } catch (error) { alert("Erro ao salvar categoria: " + error.message); }
   };
 
-  const removerCategoria = async (cat) => {
-    if (window.confirm(`Excluir a categoria "${cat}" e todos os seus produtos?`)) {
-      try {
-        await supabase.from('produtos').delete().eq('categoria', cat);
-        const { error } = await supabase.from('categorias').delete().eq('nome', cat);
-        if (error) throw error;
-        setAvisoSucesso("Categoria removida!");
-        await carregarTudoDoBanco();
-      } catch (error) { alert("Erro ao excluir: " + error.message); }
+const removerCategoria = async (cat) => {
+  if (window.confirm(`AVISO CRÍTICO: Excluir a categoria "${cat}" apagará TODOS os produtos dentro dela. Confirmar?`)) {
+    try {
+      // 1. Apaga os produtos vinculados a essa categoria primeiro (evita erro de chave estrangeira)
+      const { error: errorProdutos } = await supabase
+        .from('produtos')
+        .delete()
+        .eq('categoria', cat);
+
+      if (errorProdutos) throw errorProdutos;
+
+      // 2. Agora apaga a categoria
+      const { error: errorCat } = await supabase
+        .from('categorias')
+        .delete()
+        .eq('nome', cat);
+
+      if (errorCat) throw errorCat;
+
+      setAvisoSucesso("Categoria e produtos removidos!");
+      await carregarTudoDoBanco(); // Atualiza a tela sem dar F5
+      
+    } catch (error) {
+      console.error("Erro ao excluir:", error);
+      alert("Erro ao excluir: " + error.message);
     }
-  };
+  }
+};
 
   const salvarProdutoAdmin = async (e) => {
     e.preventDefault();
