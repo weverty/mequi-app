@@ -71,115 +71,11 @@ const [historicoVendas, setHistoricoVendas] = useState(() => {
     return 0;
   });
 
-const atualizarDadosDoBanco = async () => {
-  try {
-    const response = await fetch('http://localhost:3001/produtos');
-    const produtosDoBanco = await response.json();
+  useEffect(() => {
+  localStorage.setItem('mequi_total', total.toString());
+}, [total]);
 
-    if (produtosDoBanco.length > 0) {
-      const categoriasUnicas = [...new Set(produtosDoBanco.map(p => p.categoria))];
-      const produtosAgrupados = {};
-
-      categoriasUnicas.forEach(cat => {
-        produtosAgrupados[cat] = produtosDoBanco.filter(p => p.categoria === cat);
-      });
-
-      setDados(prev => ({
-        ...prev,
-        categorias: categoriasUnicas,
-        produtos: produtosAgrupados
-      }));
-    }
-  } catch (error) {
-    console.error("Erro ao atualizar dados:", error);
-  }
-};
-
-const dispararReimpressao = (venda) => {
-  // 1. Cria um iframe invisível para a impressão
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentWindow.document;
-
-  // 2. Monta o HTML do cupom com estilos forçados para 58mm
-  const conteudoCupom = `
-    <html>
-      <head>
-        <style>
-          @page { size: 58mm auto; margin: 0; }
-          body { 
-            width: 58mm; margin: 0; padding: 2mm; 
-            font-family: 'Courier New', Courier, monospace; 
-            color: black; background: white; font-size: 12px;
-          }
-          .text-center { text-align: center; }
-          .bold { font-weight: bold; }
-          .border-dashed { border-bottom: 1px dashed black; padding-bottom: 5px; margin-bottom: 5px; }
-          .flex { display: flex; justify-content: space-between; }
-          .item { margin-bottom: 5px; }
-          .total { font-size: 16px; font-weight: bold; margin-top: 10px; border-top: 1px solid black; pt: 5px; }
-        </style>
-      </head>
-      <body>
-        <div class="text-center border-dashed">
-          <h2 style="margin:0">SISTEMA MEQUI</h2>
-          <p style="font-size:9px">${venda.data} - ${venda.hora}</p>
-        </div>
-        
-        <div class="text-center">
-          <p class="bold" style="margin:0">${venda.tipo.toUpperCase()}</p>
-          <h1 style="font-size:35px; margin:5px 0">#${venda.senha}</h1>
-        </div>
-
-        <div class="border-dashed">
-          ${venda.itens.map(it => `
-            <div class="item">
-              <div class="flex">
-                <span class="bold">1x ${it.nome}</span>
-                <span>R$ ${it.precoFinal.toFixed(2)}</span>
-              </div>
-              ${it.adicionais.map(adc => `<div style="font-size:10px">+ ${adc}</div>`).join('')}
-              ${it.removidos.map(rem => `<div style="font-size:10px">- SEM ${rem.toUpperCase()}</div>`).join('')}
-            </div>
-          `).join('')}
-        </div>
-
-        <div class="total flex">
-          <span>TOTAL:</span>
-          <span>R$ ${venda.totalFinal.toFixed(2)}</span>
-        </div>
-
-        <div class="text-center" style="margin-top:20px; font-size:9px">
-          *** REIMPRESSÃO DE LOG ***
-        </div>
-      </body>
-    </html>
-  `;
-
-  // 3. Escreve o conteúdo no iframe e manda imprimir
-  doc.open();
-  doc.write(conteudoCupom);
-  doc.close();
-
-  // 4. Aguarda carregar e dispara
-  iframe.contentWindow.focus();
-  setTimeout(() => {
-    iframe.contentWindow.print();
-    // 5. Remove o iframe após a janela de impressão fechar
-    setTimeout(() => document.body.removeChild(iframe), 1000);
-  }, 500);
-};
-
-  // --- EFEITOS ---
-
-  // --- CARREGAMENTO GLOBAL DO SUPABASE ---
+// --- CARREGAMENTO GLOBAL DO SUPABASE ---
   const carregarTudoDoBanco = async () => {
     try {
       const [resProds, resCats, resAdcs] = await Promise.all([
@@ -213,27 +109,7 @@ const dispararReimpressao = (venda) => {
     }
   };
 
-  useEffect(() => {
-  localStorage.setItem('mequi_historico', JSON.stringify(historicoVendas));
-}, [historicoVendas]);
-
-  useEffect(() => {
-    if ((!abaAtiva || !dados.categorias.includes(abaAtiva)) && dados.categorias.length > 0) {
-      setAbaAtiva(dados.categorias[0]);
-    }
-  }, [dados.categorias, abaAtiva]);
-
-
-  useEffect(() => { setTimeout(() => setCarregando(false), 1000); }, []);
-
-  // Salva o carrinho no localStorage toda vez que ele mudar
-  useEffect(() => {
-    localStorage.setItem('mequi_carrinho', JSON.stringify(carrinho));
-  }, [carrinho]);
-
-useEffect(() => {
-
-  // --- EFEITOS DE INICIALIZAÇÃO ---
+  // --- EFEITOS DE INICIALIZAÇÃO E PERSISTÊNCIA ---
   useEffect(() => {
     carregarTudoDoBanco();
   }, []);
@@ -246,6 +122,12 @@ useEffect(() => {
     localStorage.setItem('mequi_carrinho', JSON.stringify(carrinho));
   }, [carrinho]);
 
+  useEffect(() => {
+    if ((!abaAtiva || !dados.categorias.includes(abaAtiva)) && dados.categorias.length > 0) {
+      setAbaAtiva(dados.categorias[0]);
+    }
+  }, [dados.categorias, abaAtiva]);
+
   // --- FUNÇÕES ADMIN (SUPABASE) ---
   const adicionarCategoria = async (nome) => {
     const n = nome.trim().toUpperCase(); 
@@ -256,18 +138,18 @@ useEffect(() => {
       setAvisoSucesso("Categoria criada!");
       await carregarTudoDoBanco();
       setModalCategoriasAberto(false);
-    } catch (error) { alert(error.message); }
+    } catch (error) { alert("Erro ao salvar categoria: " + error.message); }
   };
 
   const removerCategoria = async (cat) => {
-    if (window.confirm(`Excluir a categoria "${cat}"?`)) {
+    if (window.confirm(`Excluir a categoria "${cat}" e todos os seus produtos?`)) {
       try {
         await supabase.from('produtos').delete().eq('categoria', cat);
         const { error } = await supabase.from('categorias').delete().eq('nome', cat);
         if (error) throw error;
         setAvisoSucesso("Categoria removida!");
         await carregarTudoDoBanco();
-      } catch (error) { alert(error.message); }
+      } catch (error) { alert("Erro ao excluir: " + error.message); }
     }
   };
 
@@ -295,9 +177,10 @@ useEffect(() => {
       }
       if (erro) throw erro;
       setModalAdminAberto(false);
+      setProdutoSendoEditado(null);
       setAvisoSucesso("Cardápio Atualizado!");
       await carregarTudoDoBanco();
-    } catch (error) { alert(error.message); }
+    } catch (error) { alert("Erro ao salvar no Supabase: " + error.message); }
   };
 
   const deletarProduto = async (id) => {
@@ -305,9 +188,9 @@ useEffect(() => {
       try {
         const { error } = await supabase.from('produtos').delete().eq('id', id);
         if (error) throw error;
-        setAvisoSucesso("Removido!");
+        setAvisoSucesso("Produto removido!");
         await carregarTudoDoBanco();
-      } catch (error) { alert(error.message); }
+      } catch (error) { alert("Erro ao excluir produto: " + error.message); }
     }
   };
 
@@ -322,46 +205,29 @@ useEffect(() => {
       if (error) throw error;
       setModalAdicionaisAberto(false);
       await carregarTudoDoBanco();
-    } catch (error) { alert(error.message); }
+    } catch (error) { alert("Erro ao salvar adicional: " + error.message); }
   };
-}, []);
 
-useEffect(() => {
-  const params = new URLSearchParams(window.location.search);
-  const status = params.get('status');
-
-  if (status === 'approved') {
-    const confirmarPedidoOnline = async () => {
-      const senha = Math.floor(Math.random() * 900) + 100;
-      
-      const resumoPedido = {
-        senha: senha.toString(),
-        itens: JSON.parse(localStorage.getItem('mequi_carrinho') || '[]'),
-        tipo: 'online',
-        total: parseFloat(localStorage.getItem('mequi_total_temp') || '0'),
-        data: new Date().toLocaleString(),
-        pagamento: 'Mercado Pago (Aprovado)'
-      };
-
-      // Salva no Supabase
-      await supabase.from('pedidos').insert([resumoPedido]);
-      
-      // Salva localmente para persistência
-      localStorage.setItem('mequi_ultimo_pedido', JSON.stringify(resumoPedido));
-      setPedidoFinalizado(resumoPedido);
-      
-      // Limpa carrinho
-      setCarrinho([]);
-      setTotal(0);
-      localStorage.removeItem('mequi_carrinho');
-      
-      // Limpa a URL
-      window.history.replaceState({}, document.title, "/");
-    };
-
-    confirmarPedidoOnline();
-  }
-}, []);
+  const dispararReimpressao = (venda) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed'; iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow.document;
+    const conteudoCupom = `
+      <html>
+        <head><style>body { width: 58mm; font-family: monospace; font-size: 12px; }</style></head>
+        <body>
+          <div style="text-align:center"><h2>MEQUI</h2><p>#${venda.senha}</p></div>
+          <hr>
+          ${venda.itens.map(it => `<div>1x ${it.nome} - R$ ${it.precoFinal.toFixed(2)}</div>`).join('')}
+          <hr>
+          <b>TOTAL: R$ ${venda.totalFinal.toFixed(2)}</b>
+        </body>
+      </html>`;
+    doc.open(); doc.write(conteudoCupom); doc.close();
+    iframe.contentWindow.focus();
+    setTimeout(() => { iframe.contentWindow.print(); document.body.removeChild(iframe); }, 500);
+  };
 
 // MUDANÇA NO App.jsx
 const gerarPagamentoMercadoPago = async () => {
@@ -721,7 +587,7 @@ const deletarProduto = async (id) => {
 
       if (response.ok) {
         setAvisoSucesso("Produto removido com sucesso!");
-        await atualizarDadosDoBanco();
+        await carregarTudoDoBanco();
         setTimeout(() => setAvisoSucesso(null), 3000);
       }
     } catch (error) {
@@ -878,7 +744,7 @@ const deletarProduto = async (id) => {
             {modoAdmin && (
               <div className="absolute top-4 right-4 flex gap-2">
                 <button onClick={() => {setProdutoSendoEditado(item); setModalAdminAberto(true)}} className="bg-blue-500 text-white p-2 rounded-lg text-[8px] font-bold uppercase">Editar</button>
-                <button onClick={() => deletarProduto(item._id)} className="bg-red-500 text-white p-2 rounded-lg text-[8px] font-bold uppercase">X</button>
+                <button onClick={() => deletarProduto(item.id)} className="bg-red-500 text-white p-2 rounded-lg text-[8px] font-bold uppercase">X</button>
               </div>
             )}
           </div>
