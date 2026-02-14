@@ -60,9 +60,6 @@ const [valorTroco, setValorTroco] = useState('');
   });
 
 
-  const CELULAR_LOJA = "5531972129019"; // COLOQUE O SEU NÚMERO AQUI (com 55 + DDD)
-
-
 const [historicoVendas, setHistoricoVendas] = useState(() => {
   const salvo = localStorage.getItem('mequi_historico');
   // Se existir algo salvo, retorna os dados, senão retorna um array vazio
@@ -500,7 +497,7 @@ const TelaSucesso = () => {
   const dadosSalvos = JSON.parse(localStorage.getItem('mequi_dados_cliente') || '{}');
   
   // 2. Configura o número da sua loja (Substitua pelo seu real)
-  const CELULAR_LOJA = "5511999999999"; 
+  const CELULAR_LOJA = "5531972129019"; 
 
   // 3. Monta a lista de itens com os detalhes de adicionais e removidos
   const itensTexto = pedidoFinalizado.itens.map(it => {
