@@ -33,6 +33,11 @@ export default function App() {
   const [avisoSucesso, setAvisoSucesso] = useState(null);
   const [pedidoParaImprimir, setPedidoParaImprimir] = useState(null);
 
+const [pedidoFinalizado, setPedidoFinalizado] = useState(() => {
+  const salvo = localStorage.getItem('mequi_ultimo_pedido');
+  return salvo ? JSON.parse(salvo) : null;
+});
+
   // DADOS E HISTÓRICO
   const [dados, setDados] = useState(() => {
     const salvo = localStorage.getItem('mequi_vFinal_data');
@@ -229,30 +234,32 @@ useEffect(() => {
   const status = params.get('status');
 
   if (status === 'approved') {
-    // Função interna para gravar o pedido que veio do checkout online
     const confirmarPedidoOnline = async () => {
       const senha = Math.floor(Math.random() * 900) + 100;
       
-      const pedidoOnline = {
+      const resumoPedido = {
         senha: senha.toString(),
         itens: JSON.parse(localStorage.getItem('mequi_carrinho') || '[]'),
-        tipo: 'online_retorno',
-        info: 'Pago via Mercado Pago',
-        totalfinal: parseFloat(localStorage.getItem('mequi_total_temp') || '0'),
-        status: 'pago_online'
+        tipo: 'online',
+        total: parseFloat(localStorage.getItem('mequi_total_temp') || '0'),
+        data: new Date().toLocaleString(),
+        pagamento: 'Mercado Pago (Aprovado)'
       };
 
-      await supabase.from('pedidos').insert([pedidoOnline]);
+      // Salva no Supabase
+      await supabase.from('pedidos').insert([resumoPedido]);
       
-      setSenhaGerada(senha);
+      // Salva localmente para persistência
+      localStorage.setItem('mequi_ultimo_pedido', JSON.stringify(resumoPedido));
+      setPedidoFinalizado(resumoPedido);
+      
+      // Limpa carrinho
       setCarrinho([]);
       setTotal(0);
       localStorage.removeItem('mequi_carrinho');
       
-      alert("✅ Pagamento aprovado! Seu pedido já está na cozinha.");
+      // Limpa a URL
       window.history.replaceState({}, document.title, "/");
-      
-      setTimeout(() => setSenhaGerada(null), 5000);
     };
 
     confirmarPedidoOnline();
@@ -454,6 +461,84 @@ const finalizarPedidoTotal = async () => {
   } finally {
     setProcessandoMP(false);
   }
+};
+
+// --- COMPONENTE DA TELA DE SUCESSO ---
+const TelaSucesso = () => {
+  if (!pedidoFinalizado) return null;
+
+  // Formata a mensagem para o WhatsApp
+  const itensTexto = pedidoFinalizado.itens.map(it => `• 1x ${it.nome}`).join('%0A');
+  const mensagemZap = `*PEDIDO CONFIRMADO - MEQUI*%0A%0A` +
+    `*Senha:* #${pedidoFinalizado.senha}%0A` +
+    `*Data:* ${pedidoFinalizado.data}%0A%0A` +
+    `*Itens:*%0A${itensTexto}%0A%0A` +
+    `*Total:* R$ ${pedidoFinalizado.total.toFixed(2)}%0A` +
+    `*Pagamento:* ${pedidoFinalizado.pagamento}`;
+
+  return (
+    <div className="fixed inset-0 bg-white z-[5000] flex flex-col items-center p-6 overflow-y-auto animate-fadeIn">
+      <div className="w-full max-w-md bg-white rounded-[3rem] p-8 border-t-[12px] border-green-500 shadow-2xl mt-10">
+        <div className="flex flex-col items-center mb-8">
+          <div className="bg-green-100 text-green-600 rounded-full p-6 mb-4 animate-bounce">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-4xl font-black uppercase italic text-center tracking-tighter">Pedido Pago!</h2>
+          <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest mt-2">Retire no balcão quando chamar sua senha</p>
+        </div>
+
+        <div className="bg-gray-50 rounded-[2.5rem] p-8 shadow-inner border-2 border-dashed border-gray-200 mb-8 relative">
+          {/* Círculos de "recibo" nas laterais */}
+          <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full"></div>
+          <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full"></div>
+          
+          <div className="text-center mb-6">
+            <p className="text-[10px] font-black text-gray-400 uppercase italic">Sua Senha</p>
+            <h1 className="text-7xl font-black italic text-gray-800 tracking-tighter">#{pedidoFinalizado.senha}</h1>
+          </div>
+          
+          <div className="space-y-3 border-t border-gray-200 pt-6">
+            {pedidoFinalizado.itens.map((it, i) => (
+              <div key={i} className="flex justify-between text-[11px] font-black uppercase italic text-gray-600">
+                <span>1x {it.nome}</span>
+                <span>R$ {it.precoFinal.toFixed(2)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between border-t-4 border-double border-gray-200 mt-4 pt-4 text-2xl font-black italic text-green-600 tracking-tighter">
+              <span>TOTAL</span>
+              <span>R$ {pedidoFinalizado.total.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <a 
+            href={`https://wa.me/?text=${mensagemZap}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full bg-[#25D366] text-white py-5 rounded-2xl font-black uppercase italic flex justify-center items-center gap-3 shadow-lg active:scale-95 transition-all text-sm"
+          >
+            <span className="text-2xl">📱</span> Compartilhar no WhatsApp
+          </a>
+          
+          <button 
+            onClick={() => {
+              if(window.confirm("Deseja voltar ao cardápio? Seu resumo sairá da tela.")){
+                localStorage.removeItem('mequi_ultimo_pedido');
+                setPedidoFinalizado(null);
+              }
+            }}
+            className="w-full bg-gray-100 text-gray-400 py-4 rounded-2xl font-black uppercase italic text-xs hover:bg-gray-200 transition-colors"
+          >
+            Fazer Novo Pedido
+          </button>
+        </div>
+      </div>
+      <p className="mt-8 text-gray-300 font-black italic uppercase text-[10px]">Mequi App - Recibo Digital</p>
+    </div>
+  );
 };
 
   // --- RENDER MONITOR ---
@@ -1005,8 +1090,7 @@ const deletarProduto = async (id) => {
     </div>
   </div>
 )}
-
-
+      <TelaSucesso />
 
     </div>
   );
