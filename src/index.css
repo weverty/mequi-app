@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@media print {
+  /* Força a página a ter fundo branco e texto preto */
+  html, body {
+    background: white !important;
+    color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Esconde TUDO o que está dentro do body */
+  body > * {
+    display: none !important;
+  }
+
+  /* Mostra APENAS o cupom e força ele a ignorar os 'nones' do React */
+  #cupom-impressao {
+    display: block !important;
+    visibility: visible !important;
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 58mm !important;
+    height: auto !important;
+    opacity: 1 !important;
+  }
+
+  /* Garante que o texto dentro dele seja visível */
+  #cupom-impressao * {
+    visibility: visible !important;
+    display: block !important;
+    color: black !important;
+  }
+
+  @page {
+    size: 58mm auto;
+    margin: 0;
+  }
+}

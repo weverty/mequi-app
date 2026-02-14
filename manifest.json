@@ -1,0 +1,15 @@
+{
+  "short_name": "MequiApp",
+  "name": "Sistema de Pedidos Mequi",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3075/3075977.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#db0007",
+  "background_color": "#ffffff"
+}
