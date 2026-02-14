@@ -59,6 +59,10 @@ const [valorTroco, setValorTroco] = useState('');
     };
   });
 
+
+  const CELULAR_LOJA = "5531972129019"; // COLOQUE O SEU NÚMERO AQUI (com 55 + DDD)
+
+
 const [historicoVendas, setHistoricoVendas] = useState(() => {
   const salvo = localStorage.getItem('mequi_historico');
   // Se existir algo salvo, retorna os dados, senão retorna um array vazio
@@ -489,18 +493,38 @@ const finalizarPedidoTotal = async () => {
   }
 };
 
-// --- COMPONENTE DA TELA DE SUCESSO ---
 const TelaSucesso = () => {
   if (!pedidoFinalizado) return null;
 
-  // Formata a mensagem para o WhatsApp
-  const itensTexto = pedidoFinalizado.itens.map(it => `• 1x ${it.nome}`).join('%0A');
-  const mensagemZap = `*PEDIDO CONFIRMADO - MEQUI*%0A%0A` +
-    `*Senha:* #${pedidoFinalizado.senha}%0A` +
-    `*Data:* ${pedidoFinalizado.data}%0A%0A` +
-    `*Itens:*%0A${itensTexto}%0A%0A` +
-    `*Total:* R$ ${pedidoFinalizado.total.toFixed(2)}%0A` +
-    `*Pagamento:* ${pedidoFinalizado.pagamento}`;
+  // Montagem do Relatório detalhado para o WhatsApp
+  const itensTexto = pedidoFinalizado.itens.map(it => {
+    let detalhes = `• 1x ${it.nome} (R$ ${it.precoFinal.toFixed(2)})`;
+    if (it.adicionais && it.adicionais.length > 0) detalhes += `%0A  + Adic: ${it.adicionais.join(', ')}`;
+    if (it.removidos && it.removidos.length > 0) detalhes += `%0A  - Sem: ${it.removidos.join(', ')}`;
+    return detalhes;
+  }).join('%0A%0A');
+
+  const dados = JSON.parse(localStorage.getItem('mequi_dados_cliente') || '{}');
+  const infoPagamento = pedidoFinalizado.pagamento || "Pagamento na Entrega/Retirada";
+
+  const mensagemZap = 
+    `*🍔 NOVO PEDIDO - #${pedidoFinalizado.senha}*%0A` +
+    `------------------------------%0A` +
+    `*CLIENTE:* ${dados.nome || 'Não informado'}%0A` +
+    `*CONTATO:* ${dados.telefone || 'Não informado'}%0A` +
+    `*TIPO:* ${pedidoFinalizado.tipo === 'entrega' ? '🚀 DELIVERY' : '🛍️ RETIRADA'}%0A%0A` +
+    
+    (pedidoFinalizado.tipo === 'entrega' ? 
+    `*ENDEREÇO:*%0A${dados.rua}, ${dados.numero}%0A*REF:* ${dados.referencia || 'N/A'}%0A%0A` : '') +
+    
+    `*ITENS:*%0A${itensTexto}%0A%0A` +
+    
+    `------------------------------%0A` +
+    `*SUBTOTAL:* R$ ${total.toFixed(2)}%0A` +
+    (pedidoFinalizado.tipo === 'entrega' ? `*TAXA ENTREGA:* R$ 5,00%0A` : '') +
+    `*TOTAL FINAL: R$ ${pedidoFinalizado.total.toFixed(2)}*%0A` +
+    `------------------------------%0A` +
+    `*PAGAMENTO:* ${infoPagamento}`;
 
   return (
     <div className="fixed inset-0 bg-white z-[5000] flex flex-col items-center p-6 overflow-y-auto animate-fadeIn">
@@ -511,27 +535,18 @@ const TelaSucesso = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-4xl font-black uppercase italic text-center tracking-tighter">Pedido Pago!</h2>
-          <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest mt-2">Retire no balcão quando chamar sua senha</p>
+          <h2 className="text-4xl font-black uppercase italic text-center tracking-tighter">Pedido Confirmado!</h2>
+          <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest mt-2">Envie o resumo para a nossa loja abaixo</p>
         </div>
 
         <div className="bg-gray-50 rounded-[2.5rem] p-8 shadow-inner border-2 border-dashed border-gray-200 mb-8 relative">
-          {/* Círculos de "recibo" nas laterais */}
-          <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full"></div>
-          <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full"></div>
-          
           <div className="text-center mb-6">
             <p className="text-[10px] font-black text-gray-400 uppercase italic">Sua Senha</p>
             <h1 className="text-7xl font-black italic text-gray-800 tracking-tighter">#{pedidoFinalizado.senha}</h1>
           </div>
           
           <div className="space-y-3 border-t border-gray-200 pt-6">
-            {pedidoFinalizado.itens.map((it, i) => (
-              <div key={i} className="flex justify-between text-[11px] font-black uppercase italic text-gray-600">
-                <span>1x {it.nome}</span>
-                <span>R$ {it.precoFinal.toFixed(2)}</span>
-              </div>
-            ))}
+            <p className="text-[11px] font-black uppercase text-gray-400 text-center">Resumo enviado ao WhatsApp</p>
             <div className="flex justify-between border-t-4 border-double border-gray-200 mt-4 pt-4 text-2xl font-black italic text-green-600 tracking-tighter">
               <span>TOTAL</span>
               <span>R$ {pedidoFinalizado.total.toFixed(2)}</span>
@@ -540,21 +555,21 @@ const TelaSucesso = () => {
         </div>
 
         <div className="space-y-4">
+          {/* BOTÃO DO WHATSAPP DIRECIONADO PARA A LOJA */}
           <a 
-            href={`https://wa.me/?text=${mensagemZap}`}
+            href={`https://api.whatsapp.com/send?phone=${CELULAR_LOJA}&text=${mensagemZap}`}
             target="_blank"
             rel="noopener noreferrer"
             className="w-full bg-[#25D366] text-white py-5 rounded-2xl font-black uppercase italic flex justify-center items-center gap-3 shadow-lg active:scale-95 transition-all text-sm"
           >
-            <span className="text-2xl">📱</span> Compartilhar no WhatsApp
+            <span className="text-2xl">📱</span> Enviar para a Loja
           </a>
           
           <button 
             onClick={() => {
-              if(window.confirm("Deseja voltar ao cardápio? Seu resumo sairá da tela.")){
-                localStorage.removeItem('mequi_ultimo_pedido');
-                setPedidoFinalizado(null);
-              }
+              localStorage.removeItem('mequi_ultimo_pedido');
+              setPedidoFinalizado(null);
+              window.location.reload(); // Recarrega para limpar tudo
             }}
             className="w-full bg-gray-100 text-gray-400 py-4 rounded-2xl font-black uppercase italic text-xs hover:bg-gray-200 transition-colors"
           >
@@ -562,7 +577,6 @@ const TelaSucesso = () => {
           </button>
         </div>
       </div>
-      <p className="mt-8 text-gray-300 font-black italic uppercase text-[10px]">Mequi App - Recibo Digital</p>
     </div>
   );
 };
@@ -1110,17 +1124,28 @@ const deletarProduto = async (id) => {
     </div>
 
     {/* CAMPO DE VALOR DO TROCO */}
-    {metodoLocalDetallhe === 'troco' && (
-      <div className="animate-slideDown">
-        <input 
-          type="number" 
-          placeholder="Troco para quanto? (Ex: 50)" 
-          className="w-full p-4 bg-white rounded-xl font-bold border-2 border-green-200 outline-none focus:border-green-500" 
-          value={valorTroco} 
-          onChange={(e) => setValorTroco(e.target.value)} 
-        />
-      </div>
+{metodoLocalDetallhe === 'troco' && (
+  <div className="animate-slideDown space-y-2">
+    <input 
+      type="number" 
+      placeholder="Troco para quanto? (Ex: 50)" 
+      className={`w-full p-4 bg-white rounded-xl font-bold border-2 outline-none ${
+        valorTroco && Number(valorTroco) < (total + (opcaoConsumo === 'entrega' ? 5 : 0)) 
+        ? 'border-red-500 text-red-500' 
+        : 'border-green-200 focus:border-green-500'
+      }`}
+      value={valorTroco} 
+      onChange={(e) => setValorTroco(e.target.value)} 
+    />
+    
+    {/* AVISO DE ERRO */}
+    {valorTroco && Number(valorTroco) < (total + (opcaoConsumo === 'entrega' ? 5 : 0)) && (
+      <p className="text-[10px] text-red-600 font-bold uppercase text-center">
+        ❌ O valor para troco deve ser maior que o total!
+      </p>
     )}
+  </div>
+)}
   </div>
 )}
 
