@@ -19,8 +19,8 @@ export default async function handler(req, res) {
           currency_id: "BRL"
         })),
         back_urls: {
-          success: "https://seu-site.vercel.app/?status=approved", // Troque pelo seu link
-          failure: "https://seu-site.vercel.app/?status=failed",
+          success: "https://mequi-app.vercel.app/?status=approved", // Troque pelo seu link
+          failure: "https://mequi-app.vercel.app/?status=failed",
         },
         auto_return: "approved",
       })

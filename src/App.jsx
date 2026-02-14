@@ -263,7 +263,7 @@ useEffect(() => {
 const gerarPagamentoMercadoPago = async () => {
     setProcessandoMP(true);
     try {
-        // AGORA APONTA PARA A PASTA /api DO SEU PRÓPRIO SITE
+        // Use apenas /api/... sem o http://localhost
         const response = await fetch('/api/criar-pagamento', { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -272,17 +272,19 @@ const gerarPagamentoMercadoPago = async () => {
                     titulo: i.nome, 
                     preco: i.precoFinal, 
                     quantidade: 1 
-                })),
-                taxa: opcaoConsumo === 'entrega' ? 5 : 0
+                }))
             })
         });
 
+        if (!response.ok) throw new Error("Erro na API");
+
         const resData = await response.json();
         if (resData.url) {
-            window.location.href = resData.url; // REDIRECIONA PARA O MERCADO PAGO
+            window.location.href = resData.url; 
         }
     } catch (err) {
-        alert("Erro ao conectar com o serviço de pagamento.");
+        console.error(err);
+        alert("Ocorreu um erro ao gerar o pagamento. Verifique se o token está correto.");
     } finally {
         setProcessandoMP(false);
     }
