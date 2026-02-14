@@ -179,26 +179,7 @@ const dispararReimpressao = (venda) => {
 
   // --- EFEITOS ---
 
-  useEffect(() => {
-  localStorage.setItem('mequi_historico', JSON.stringify(historicoVendas));
-}, [historicoVendas]);
-
-  useEffect(() => {
-    if ((!abaAtiva || !dados.categorias.includes(abaAtiva)) && dados.categorias.length > 0) {
-      setAbaAtiva(dados.categorias[0]);
-    }
-  }, [dados.categorias, abaAtiva]);
-
-
-  useEffect(() => { setTimeout(() => setCarregando(false), 1000); }, []);
-
-  // Salva o carrinho no localStorage toda vez que ele mudar
-  useEffect(() => {
-    localStorage.setItem('mequi_carrinho', JSON.stringify(carrinho));
-  }, [carrinho]);
-
-useEffect(() => {
-// --- CARREGAMENTO GLOBAL DO SUPABASE ---
+  // --- CARREGAMENTO GLOBAL DO SUPABASE ---
   const carregarTudoDoBanco = async () => {
     try {
       const [resProds, resCats, resAdcs] = await Promise.all([
@@ -231,6 +212,26 @@ useEffect(() => {
       setCarregando(false);
     }
   };
+
+  useEffect(() => {
+  localStorage.setItem('mequi_historico', JSON.stringify(historicoVendas));
+}, [historicoVendas]);
+
+  useEffect(() => {
+    if ((!abaAtiva || !dados.categorias.includes(abaAtiva)) && dados.categorias.length > 0) {
+      setAbaAtiva(dados.categorias[0]);
+    }
+  }, [dados.categorias, abaAtiva]);
+
+
+  useEffect(() => { setTimeout(() => setCarregando(false), 1000); }, []);
+
+  // Salva o carrinho no localStorage toda vez que ele mudar
+  useEffect(() => {
+    localStorage.setItem('mequi_carrinho', JSON.stringify(carrinho));
+  }, [carrinho]);
+
+useEffect(() => {
 
   // --- EFEITOS DE INICIALIZAÇÃO ---
   useEffect(() => {
