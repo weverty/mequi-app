@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from './supabaseClient';
 
 export default function App() {
   const [carregando, setCarregando] = useState(true);
@@ -228,28 +229,47 @@ useEffect(() => {
   const status = params.get('status');
 
   if (status === 'approved') {
-    alert("✅ Pagamento aprovado! Seu pedido já está na cozinha.");
-    // Aqui você pode chamar sua função de limpar carrinho se desejar
-    setCarrinho([]);
-    setTotal(0);
-    // Limpa os parâmetros da URL para não repetir o alerta
-    window.history.replaceState({}, document.title, "/");
+    // Função interna para gravar o pedido que veio do checkout online
+    const confirmarPedidoOnline = async () => {
+      const senha = Math.floor(Math.random() * 900) + 100;
+      
+      const pedidoOnline = {
+        senha: senha.toString(),
+        itens: JSON.parse(localStorage.getItem('mequi_carrinho') || '[]'),
+        tipo: 'online_retorno',
+        info: 'Pago via Mercado Pago',
+        totalfinal: parseFloat(localStorage.getItem('mequi_total_temp') || '0'),
+        status: 'pago_online'
+      };
+
+      await supabase.from('pedidos').insert([pedidoOnline]);
+      
+      setSenhaGerada(senha);
+      setCarrinho([]);
+      setTotal(0);
+      localStorage.removeItem('mequi_carrinho');
+      
+      alert("✅ Pagamento aprovado! Seu pedido já está na cozinha.");
+      window.history.replaceState({}, document.title, "/");
+      
+      setTimeout(() => setSenhaGerada(null), 5000);
+    };
+
+    confirmarPedidoOnline();
   }
 }, []);
 
+// MUDANÇA NO App.jsx
 const gerarPagamentoMercadoPago = async () => {
     setProcessandoMP(true);
     try {
-        // Log para você ver no F12 se os dados estão certos
-        console.log("Enviando dados para o servidor...", carrinho);
-
-        const response = await fetch('http://localhost:3001/criar-pagamento', {
+        // AGORA APONTA PARA A PASTA /api DO SEU PRÓPRIO SITE
+        const response = await fetch('/api/criar-pagamento', { 
             method: 'POST',
-            mode: 'cors', // Força o modo CORS
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 itens: carrinho.map(i => ({ 
-                    titulo: i.titulo || i.nome, 
+                    titulo: i.nome, 
                     preco: i.precoFinal, 
                     quantidade: 1 
                 })),
@@ -258,16 +278,11 @@ const gerarPagamentoMercadoPago = async () => {
         });
 
         const resData = await response.json();
-
         if (resData.url) {
-            window.location.href = resData.url;
-        } else {
-            console.error("Servidor não retornou URL:", resData);
-            alert("Erro do Mercado Pago: " + (resData.error || "Tente novamente"));
+            window.location.href = resData.url; // REDIRECIONA PARA O MERCADO PAGO
         }
     } catch (err) {
-        console.error("ERRO DE CONEXÃO:", err);
-        alert("Não foi possível conectar ao servidor. Verifique o console (F12).");
+        alert("Erro ao conectar com o serviço de pagamento.");
     } finally {
         setProcessandoMP(false);
     }
@@ -385,31 +400,48 @@ const adicionarAoCarrinho = () => {
 };
 
 const finalizarPedidoTotal = async () => {
-  const senha = Math.floor(Math.random() * 900) + 100;
-  const infoDestino = opcaoConsumo === 'comer' ? `Mesa ${dadosEntrega.mesa}` : 
-                     opcaoConsumo === 'entrega' ? `${dadosEntrega.rua}, ${dadosEntrega.numero}` : 'Balcão';
-  
-  const totalComTaxa = total + (opcaoConsumo === 'entrega' ? 5 : 0);
+  // Se o método for online, chama o Mercado Pago em vez de finalizar direto
+  if (metodoPagamento === 'online') {
+    await gerarPagamentoMercadoPago();
+    return; // Para a execução aqui, o resto acontece na volta do MP
+  }
 
-  const novoPedido = {
-    senha: senha.toString(),
-    itens: carrinho, // O Supabase salva o array de itens automaticamente
-    tipo: opcaoConsumo,
-    info: infoDestino,
-    totalfinal: totalComTaxa,
-    status: 'pago'
-  };
+  // Se for local (na entrega), segue o fluxo normal do Supabase
+  try {
+    setProcessandoMP(true);
+    const senha = Math.floor(Math.random() * 900) + 100;
+    const infoDestino = opcaoConsumo === 'comer' ? `Mesa ${dadosEntrega.mesa}` : 
+                       opcaoConsumo === 'entrega' ? `${dadosEntrega.rua}, ${dadosEntrega.numero}` : 'Balcão';
+    
+    const novoPedido = {
+      senha: senha.toString(),
+      itens: carrinho,
+      tipo: opcaoConsumo,
+      info: infoDestino,
+      totalfinal: total + (opcaoConsumo === 'entrega' ? 5 : 0),
+      status: 'pendente_pagamento_local' 
+    };
 
-  // MÁGICA AQUI: Salva no Banco de Dados Real
-  const { error } = await supabase.from('pedidos').insert([novoPedido]);
+    const { error } = await supabase.from('pedidos').insert([novoPedido]);
 
-  if (error) {
-    alert("Erro ao salvar no banco: " + error.message);
-  } else {
+    if (error) throw error;
+
     setSenhaGerada(senha);
-    // Limpa tudo
-    setTimeout(() => setSenhaGerada(null), 3000);
-    setCarrinho([]); setTotal(0); setModalFluxoAberto(false);
+    // Salva no histórico local também
+    setHistoricoVendas(prev => [{...novoPedido, id: Date.now(), data: new Date().toLocaleDateString(), hora: new Date().toLocaleTimeString()}, ...prev]);
+    
+    setTimeout(() => {
+      setSenhaGerada(null);
+      setCarrinho([]);
+      setTotal(0);
+      setModalFluxoAberto(false);
+      setOpcaoConsumo('');
+    }, 3000);
+
+  } catch (err) {
+    alert("Erro ao salvar pedido: " + err.message);
+  } finally {
+    setProcessandoMP(false);
   }
 };
 
@@ -863,23 +895,25 @@ const deletarProduto = async (id) => {
       {modalFluxoAberto && (
         <div className="fixed inset-0 bg-black/80 z-[210] flex items-center justify-center p-4 backdrop-blur-md">
           <div className="bg-white w-full max-w-lg rounded-[3.5rem] p-10 shadow-2xl border-t-[12px] border-[#ffbc0d]">
-            <h2 className="text-4xl font-black uppercase italic mb-8 text-center text-gray-800 tracking-tighter">Como pagar?</h2>
-            
-            {/* Escolha do Método */}
-            <div className="grid grid-cols-2 gap-4 mb-8">
-                <button 
-                    onClick={() => setMetodoPagamento('local')} 
-                    className={`p-4 rounded-2xl border-4 font-black text-[10px] uppercase transition-all ${metodoPagamento === 'local' ? 'border-red-600 bg-red-50 text-red-600' : 'border-gray-100 text-gray-300'}`}
-                >
-                    Pagar na Entrega
-                </button>
-                <button 
-                    onClick={() => setMetodoPagamento('online')} 
-                    className={`p-4 rounded-2xl border-4 font-black text-[10px] uppercase transition-all ${metodoPagamento === 'online' ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-gray-100 text-gray-300'}`}
-                >
-                    Pagar Online (MP)
-                </button>
-            </div>
+<p className="text-[10px] font-black text-gray-400 uppercase mb-3 italic text-center">Forma de Pagamento</p>
+<div className="grid grid-cols-2 gap-4 mb-8">
+    <button 
+        type="button"
+        onClick={() => setMetodoPagamento('local')} 
+        className={`p-4 rounded-3xl border-4 font-black text-[12px] uppercase transition-all flex flex-col items-center gap-2 ${metodoPagamento === 'local' ? 'border-green-600 bg-green-50 text-green-600 scale-105' : 'border-gray-100 text-gray-300'}`}
+    >
+        <span>💵</span>
+        <span>Na Entrega</span>
+    </button>
+    <button 
+        type="button"
+        onClick={() => setMetodoPagamento('online')} 
+        className={`p-4 rounded-3xl border-4 font-black text-[12px] uppercase transition-all flex flex-col items-center gap-2 ${metodoPagamento === 'online' ? 'border-blue-600 bg-blue-50 text-blue-600 scale-105' : 'border-gray-100 text-gray-300'}`}
+    >
+        <span>💳</span>
+        <span>Cartão/Pix</span>
+    </button>
+</div>
 
             <div className="grid grid-cols-1 gap-4 mb-8">
               {[{ id: 'comer', label: 'Mesa Local', icon: '📍' }, { id: 'retirar', label: 'Balcão', icon: '🛍️' }, { id: 'entrega', label: 'Delivery', icon: '🚀' }].map((op) => (
