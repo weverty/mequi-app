@@ -12,12 +12,11 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         items: itens,
-        back_urls: {
-          // AQUI ESTÁ O SEGREDO: Use o seu link da Vercel
-          success: "https://mequi-app.vercel.app/?status=approved",
-          failure: "https://mequi-app.vercel.app/?status=failed",
-        },
-        auto_return: "approved",
+back_urls: {
+  success: "https://mequi-app.vercel.app/?status=approved",
+  failure: "https://mequi-app.vercel.app/?status=failed",
+},
+auto_return: "approved",
       })
     });
 
