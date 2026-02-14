@@ -198,37 +198,131 @@ const dispararReimpressao = (venda) => {
   }, [carrinho]);
 
 useEffect(() => {
-const carregarTudoDoBanco = async () => {
-  try {
-    const [resProds, resCats, resAdcs] = await Promise.all([
-      supabase.from('produtos').select('*'),
-      supabase.from('categorias').select('*'),
-      supabase.from('adicionais').select('*')
-    ]);
+// --- CARREGAMENTO GLOBAL DO SUPABASE ---
+  const carregarTudoDoBanco = async () => {
+    try {
+      const [resProds, resCats, resAdcs] = await Promise.all([
+        supabase.from('produtos').select('*'),
+        supabase.from('categorias').select('*'),
+        supabase.from('adicionais').select('*')
+      ]);
 
-    if (resProds.error || resCats.error || resAdcs.error) throw new Error("Erro na conexão");
+      if (resProds.error || resCats.error || resAdcs.error) throw new Error("Erro na conexão");
 
-    const categoriasNomes = resCats.data.map(c => c.nome);
-    const agrupados = {};
-    
-    categoriasNomes.forEach(cat => {
-      agrupados[cat] = resProds.data.filter(p => p.categoria === cat);
-    });
+      const categoriasNomes = resCats.data.map(c => c.nome.toUpperCase());
+      const agrupados = {};
+      
+      categoriasNomes.forEach(cat => {
+        agrupados[cat] = resProds.data.filter(p => p.categoria.toUpperCase() === cat);
+      });
 
-    setDados({
-      categorias: categoriasNomes,
-      produtos: agrupados,
-      adicionais: resAdcs.data
-    });
-    setCarregando(false);
-  } catch (error) {
-    console.error("Falha ao sincronizar:", error);
-  }
-};
+      setDados({
+        categorias: categoriasNomes,
+        produtos: agrupados,
+        adicionais: resAdcs.data
+      });
+      
+      if (categoriasNomes.length > 0 && !abaAtiva) {
+        setAbaAtiva(categoriasNomes[0]);
+      }
+      setCarregando(false);
+    } catch (error) {
+      console.error("Falha ao sincronizar:", error);
+      setCarregando(false);
+    }
+  };
 
-// Chame ela no useEffect de inicialização
-useEffect(() => {
-  carregarTudoDoBanco();
+  // --- EFEITOS DE INICIALIZAÇÃO ---
+  useEffect(() => {
+    carregarTudoDoBanco();
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('mequi_historico', JSON.stringify(historicoVendas));
+  }, [historicoVendas]);
+
+  useEffect(() => {
+    localStorage.setItem('mequi_carrinho', JSON.stringify(carrinho));
+  }, [carrinho]);
+
+  // --- FUNÇÕES ADMIN (SUPABASE) ---
+  const adicionarCategoria = async (nome) => {
+    const n = nome.trim().toUpperCase(); 
+    if (!n) return;
+    try {
+      const { error } = await supabase.from('categorias').insert([{ nome: n }]);
+      if (error) throw error;
+      setAvisoSucesso("Categoria criada!");
+      await carregarTudoDoBanco();
+      setModalCategoriasAberto(false);
+    } catch (error) { alert(error.message); }
+  };
+
+  const removerCategoria = async (cat) => {
+    if (window.confirm(`Excluir a categoria "${cat}"?`)) {
+      try {
+        await supabase.from('produtos').delete().eq('categoria', cat);
+        const { error } = await supabase.from('categorias').delete().eq('nome', cat);
+        if (error) throw error;
+        setAvisoSucesso("Categoria removida!");
+        await carregarTudoDoBanco();
+      } catch (error) { alert(error.message); }
+    }
+  };
+
+  const salvarProdutoAdmin = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const dadosProd = {
+      titulo: fd.get('nome'),
+      preco: parseFloat(fd.get('preco')),
+      categoria: fd.get('categoria'),
+      img: "https://cdn-icons-png.flaticon.com/512/3075/3075977.png",
+      ingredientes: fd.get('ingredientes') ? fd.get('ingredientes').split(',').map(i => i.trim()) : [],
+      permiteAcrescimo: fd.get('permiteAcrescimo') === 'on', 
+      permitirRemover: fd.get('permitirRemover') === 'on',
+    };
+
+    try {
+      let erro;
+      if (produtoSendoEditado) {
+        const { error } = await supabase.from('produtos').update(dadosProd).eq('id', produtoSendoEditado.id);
+        erro = error;
+      } else {
+        const { error } = await supabase.from('produtos').insert([dadosProd]);
+        erro = error;
+      }
+      if (erro) throw erro;
+      setModalAdminAberto(false);
+      setAvisoSucesso("Cardápio Atualizado!");
+      await carregarTudoDoBanco();
+    } catch (error) { alert(error.message); }
+  };
+
+  const deletarProduto = async (id) => {
+    if (window.confirm("Excluir este produto?")) {
+      try {
+        const { error } = await supabase.from('produtos').delete().eq('id', id);
+        if (error) throw error;
+        setAvisoSucesso("Removido!");
+        await carregarTudoDoBanco();
+      } catch (error) { alert(error.message); }
+    }
+  };
+
+  const salvarAdicionalAdmin = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      const { error } = await supabase.from('adicionais').insert([{ 
+        nome: fd.get('nome'), 
+        preco: parseFloat(fd.get('preco')) 
+      }]);
+      if (error) throw error;
+      setModalAdicionaisAberto(false);
+      await carregarTudoDoBanco();
+    } catch (error) { alert(error.message); }
+  };
 }, []);
 
 useEffect(() => {
