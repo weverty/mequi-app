@@ -41,23 +41,12 @@ const [pedidoFinalizado, setPedidoFinalizado] = useState(() => {
 const [metodoLocalDetallhe, setMetodoLocalDetallhe] = useState(''); // 'troco', 'maquininha' ou 'pix_maquina'
 const [valorTroco, setValorTroco] = useState('');
 
-  // DADOS E HISTÓRICO
-  const [dados, setDados] = useState(() => {
-    const salvo = localStorage.getItem('mequi_vFinal_data');
-    if (salvo) {
-      const parsed = JSON.parse(salvo);
-      if (!parsed.categorias) parsed.categorias = Object.keys(parsed.produtos || {});
-      return parsed;
-    }
-    return {
-      categorias: ["lanches", "bebidas"],
-      produtos: {
-        lanches: [{ id: 1, nome: "Big Mac", preco: 29.90, img: "https://cdn-icons-png.flaticon.com/512/3075/3075977.png", ingredientes: ["Pão", "Carne", "Alface", "Queijo"], permiteAcrescimo: true, permitirRemover: true }],
-        bebidas: [{ id: 3, nome: "Coca-Cola", preco: 10.90, img: "https://cdn-icons-png.flaticon.com/512/2722/2722527.png", ingredientes: ["Gelo"], permiteAcrescimo: false, permitirRemover: false }]
-      },
-      adicionais: [{ id: 101, nome: "Bacon", preco: 4.50 }, { id: 102, nome: "Queijo", preco: 3.00 }]
-    };
-  });
+// DADOS E HISTÓRICO - AGORA BUSCANDO DO BANCO
+const [dados, setDados] = useState({
+  categorias: [],
+  produtos: {},
+  adicionais: []
+});
 
 
 const [historicoVendas, setHistoricoVendas] = useState(() => {
@@ -209,37 +198,36 @@ const dispararReimpressao = (venda) => {
   }, [carrinho]);
 
 useEffect(() => {
-  const carregarTudoDoBanco = async () => {
-    try {
-      // Busca produtos, categorias e adicionais do Supabase
-      const [resProds, resCats, resAdcs] = await Promise.all([
-        supabase.from('produtos').select('*'),
-        supabase.from('categorias').select('*'),
-        supabase.from('adicionais').select('*')
-      ]);
+const carregarTudoDoBanco = async () => {
+  try {
+    const [resProds, resCats, resAdcs] = await Promise.all([
+      supabase.from('produtos').select('*'),
+      supabase.from('categorias').select('*'),
+      supabase.from('adicionais').select('*')
+    ]);
 
-      if (resProds.error || resCats.error || resAdcs.error) throw new Error("Erro ao buscar dados");
+    if (resProds.error || resCats.error || resAdcs.error) throw new Error("Erro na conexão");
 
-      const produtos = resProds.data;
-      const categorias = resCats.data.map(c => c.nome); // Pega apenas os nomes das categorias
-      const adicionais = resAdcs.data;
+    const categoriasNomes = resCats.data.map(c => c.nome);
+    const agrupados = {};
+    
+    categoriasNomes.forEach(cat => {
+      agrupados[cat] = resProds.data.filter(p => p.categoria === cat);
+    });
 
-      const agrupados = {};
-      categorias.forEach(c => {
-        agrupados[c] = produtos.filter(p => p.categoria === c);
-      });
+    setDados({
+      categorias: categoriasNomes,
+      produtos: agrupados,
+      adicionais: resAdcs.data
+    });
+    setCarregando(false);
+  } catch (error) {
+    console.error("Falha ao sincronizar:", error);
+  }
+};
 
-      setDados({
-        categorias: categorias.length > 0 ? categorias : ["lanches"],
-        produtos: agrupados,
-        adicionais: adicionais
-      });
-    } catch (error) {
-      console.error("Erro ao carregar dados do Supabase:", error);
-    } finally {
-      setCarregando(false);
-    }
-  };
+// Chame ela no useEffect de inicialização
+useEffect(() => {
   carregarTudoDoBanco();
 }, []);
 
@@ -323,12 +311,24 @@ const gerarPagamentoMercadoPago = async () => {
   };
 
 const adicionarCategoria = async (nome) => {
-  const n = nome.trim().toLowerCase();
+  const n = nome.trim().toUpperCase(); // Salvar em maiúsculo para combinar com o layout
   if (!n) return;
-  const { error } = await supabase.from('categorias').insert([{ nome: n }]);
-  if (!error) window.location.reload();
-};
 
+  try {
+    const { error } = await supabase
+      .from('categorias')
+      .insert([{ nome: n }]);
+
+    if (error) throw error;
+
+    setAvisoSucesso("Categoria adicionada!");
+    // Recarrega os dados do banco para atualizar a lista na tela
+    await carregarTudoDoBanco(); 
+    setModalCategoriasAberto(false);
+  } catch (error) {
+    alert("Erro ao salvar categoria: " + error.message);
+  }
+};
   const removerCategoria = (cat) => {
     if (window.confirm(`Deseja remover a categoria "${cat}"?`)) {
       const novasCats = dados.categorias.filter(c => c !== cat);
